@@ -3,11 +3,11 @@ import { DataTable } from '@/components/patterns/data-table'
 import { MetricCard } from '@/components/patterns/metric-card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { QueryState } from '@/components/states'
-import { useAcademicManagement } from '../api'
+import { useAdminAcademic } from '../api'
 
 /** ERP Academic Management — Figma 7:13082. */
 export function AcademicManagement() {
-  const query = useAcademicManagement()
+  const query = useAdminAcademic()
 
   return (
     <QueryState query={query}>
@@ -25,13 +25,22 @@ export function AcademicManagement() {
             <CardHeader title="Departments" />
             <DataTable
               rows={d.departments}
-              getRowKey={(r) => r.name}
+              getRowKey={(r) => r.department.id}
               empty={{ title: 'No departments configured' }}
               columns={[
-                { key: 'name', header: 'Department', cell: (r) => <span className="text-fg-heading">{r.name}</span> },
-                { key: 'programs', header: 'Programmes', cell: (r) => r.programs },
-                { key: 'faculty', header: 'Faculty', cell: (r) => r.faculty },
-                { key: 'students', header: 'Students', cell: (r) => r.students.toLocaleString(), className: 'text-right' },
+                {
+                  key: 'name',
+                  header: 'Department',
+                  cell: (r) => (
+                    <span className="text-fg-heading">
+                      {r.department.name} <span className="text-fg-muted">({r.department.code})</span>
+                    </span>
+                  ),
+                },
+                { key: 'head', header: 'Head', cell: (r) => r.headName ?? '—' },
+                { key: 'programs', header: 'Programmes', cell: (r) => r.programmeCount },
+                { key: 'faculty', header: 'Faculty', cell: (r) => r.facultyCount },
+                { key: 'students', header: 'Students', cell: (r) => r.studentCount.toLocaleString(), className: 'text-right' },
               ]}
             />
           </Card>

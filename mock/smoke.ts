@@ -28,6 +28,8 @@ const FACULTY_SAMPLES: Record<string, string> = {
   '/api/faculty/sections/:id/': 'sec-1',
   '/api/faculty/assignments/:id/submissions/': 'fasg-1',
   '/api/faculty/submissions/:id/': 'sub-1',
+  '/api/admin/users/:id/security/': 'usr-1000',
+  '/api/admin/admissions/:id/': 'app-0',
 }
 
 /**
@@ -408,6 +410,224 @@ console.log('\nfaculty writes')
 
   const ok = await send('PATCH', '/api/faculty/profile/', { officeRoom: 'Room 210' })
   check('editing a self-owned field succeeds', () => assert.equal(ok.res.status, 200))
+}
+
+console.log('\nadmin — scale, blast radius, irreversibility')
+
+{
+  // 137 users: the directory has to paginate and search server-side, because
+  // "fetch it all and filter in the browser" is not an option at 12,000.
+  const p1 = await get('/api/admin/users/', '&page=1&page_size=20')
+  const b1 = p1.body as { count: number; next: string | null; results: { id: string }[] }
+  check('user directory paginates', () => {
+    assert.equal(b1.results.length, 20)
+    assert.ok(b1.count > 100, `expected a large directory, got ${b1.count}`)
+    assert.ok(b1.next, 'no next page link')
+  })
+
+  const p2 = await get('/api/admin/users/', '&page=2&page_size=20')
+  const b2 = p2.body as { results: { id: string }[] }
+  check('page 2 returns different rows', () =>
+    assert.notEqual(b1.results[0]!.id, b2.results[0]!.id),
+  )
+
+  const filtered = await get('/api/admin/users/', '&role=faculty')
+  const bf = filtered.body as { results: { role: string }[] }
+  check('role filter is applied server-side', () => {
+    assert.ok(bf.results.length > 0)
+    assert.ok(bf.results.every((u) => u.role === 'faculty'))
+  })
+
+  const searched = await get('/api/admin/users/', '&q=U-1003')
+  const bs = searched.body as { count: number; results: { reference: string }[] }
+  check('search matches on reference', () => {
+    assert.equal(bs.count, 1)
+    assert.equal(bs.results[0]!.reference, 'U-1003')
+  })
+}
+
+{
+  const noReason = await send('PATCH', '/api/admin/users/usr-1000/status/', {
+    status: 'SUSPENDED',
+  })
+  check('suspending without a reason → 400', () => assert.equal(noReason.res.status, 400))
+
+  const ok = await send('PATCH', '/api/admin/users/usr-1000/status/', {
+    status: 'SUSPENDED',
+    reason: 'Credential sharing reported by IT.',
+  })
+  check('a reasoned suspension returns an audit entry', () => {
+    assert.equal(ok.res.status, 200)
+    const r = ok.body as { audit: { summary: string; actorName: string } }
+    assert.ok(r.audit.summary.includes('SUSPENDED'))
+    assert.ok(r.audit.actorName)
+  })
+
+  const listed = await get('/api/admin/users/', '&q=U-1000')
+  check('the status change persists in the directory', () =>
+    assert.equal((listed.body as { results: { status: string }[] }).results[0]!.status, 'SUSPENDED'),
+  )
+}
+
+{
+  // Revoking your own session mid-incident is not a recoverable state.
+  const own = await send('DELETE', '/api/admin/users/usr-1000/sessions/usr-1000-s1/')
+  check('revoking the current session → 409', () => {
+    assert.equal(own.res.status, 409)
+    assert.equal((own.body as { code: string }).code, 'current_session')
+  })
+
+  const other = await send('DELETE', '/api/admin/users/usr-1000/sessions/usr-1000-s2/')
+  check('revoking another session succeeds and audits', () =>
+    assert.equal(other.res.status, 200),
+  )
+
+  const after = await get('/api/admin/users/usr-1000/security/')
+  check('the revoked session is gone', () =>
+    assert.ok(
+      !(after.body as { sessions: { id: string }[] }).sessions.some((x) => x.id === 'usr-1000-s2'),
+    ),
+  )
+}
+
+{
+  const noTemplate = await send('POST', '/api/admin/admissions/app-0/decision/', {
+    status: 'APPROVED',
+    templateId: null,
+    note: 'Strong candidate.',
+  })
+  check('approving without an offer template → 400', () =>
+    assert.equal(noTemplate.res.status, 400),
+  )
+
+  const ok = await send('POST', '/api/admin/admissions/app-0/decision/', {
+    status: 'APPROVED',
+    templateId: 'tpl-1',
+    note: 'Strong candidate.',
+  })
+  check('a complete approval queues the offer letter', () => {
+    assert.equal(ok.res.status, 200)
+    assert.equal((ok.body as { notificationQueued: boolean }).notificationQueued, true)
+  })
+
+  const again = await send('POST', '/api/admin/admissions/app-0/decision/', {
+    status: 'REJECTED',
+    templateId: null,
+    note: 'Changed my mind.',
+  })
+  check('re-deciding a decided application → 409', () => {
+    assert.equal(again.res.status, 409)
+    assert.equal((again.body as { code: string }).code, 'already_decided')
+  })
+}
+
+{
+  // slot-3 and slot-4 sit at the same instant; slot-3 already holds Hall 303.
+  const clash = await send('PATCH', '/api/admin/exams/schedule/slot-4/', {
+    hallId: 'hall-3',
+    proctorId: 'prc-3',
+  })
+  check('double-booking a hall at the same sitting → 409', () => {
+    assert.equal(clash.res.status, 409)
+    assert.equal((clash.body as { code: string }).code, 'hall_clash')
+  })
+
+  const ok = await send('PATCH', '/api/admin/exams/schedule/slot-4/', {
+    hallId: 'hall-4',
+    proctorId: 'prc-3',
+  })
+  check('a free hall assigns and confirms the slot', () => {
+    assert.equal(ok.res.status, 200)
+    const slot = (ok.body as { slots: { id: string; state: string }[] }).slots.find(
+      (s) => s.id === 'slot-4',
+    )
+    assert.equal(slot?.state, 'CONFIRMED')
+  })
+
+  const sameHallLaterDay = await send('PATCH', '/api/admin/exams/schedule/slot-3/', {
+    hallId: 'hall-1',
+    proctorId: 'prc-3',
+  })
+  check('the same hall on a different day is not a clash', () =>
+    assert.equal(sameHallLaterDay.res.status, 200),
+  )
+}
+
+{
+  const stale = await send('PUT', '/api/admin/settings/', {
+    version: 'v0',
+    toggles: [{ key: 'payments', enabled: true }],
+  })
+  check('saving settings with a stale version → 409', () => {
+    assert.equal(stale.res.status, 409)
+    assert.equal((stale.body as { code: string }).code, 'stale_version')
+  })
+
+  const current = await get('/api/admin/settings/')
+  const version = (current.body as { version: string }).version
+  const ok = await send('PUT', '/api/admin/settings/', {
+    version,
+    toggles: [{ key: 'payments', enabled: true }],
+  })
+  check('a current version saves and bumps the lock', () => {
+    assert.equal(ok.res.status, 200)
+    const r = ok.body as { settings: { version: string; toggles: { key: string; enabled: boolean }[] } }
+    assert.notEqual(r.settings.version, version, 'version must change so a second save cannot replay')
+    assert.equal(r.settings.toggles.find((t) => t.key === 'payments')?.enabled, true)
+  })
+
+  const replay = await send('PUT', '/api/admin/settings/', {
+    version,
+    toggles: [{ key: 'payments', enabled: false }],
+  })
+  check('replaying the old version is rejected', () => assert.equal(replay.res.status, 409))
+}
+
+{
+  // Publishing marks reaches every student in the section at once.
+  const partial = await send('POST', '/api/admin/exams/marks/publish/', {
+    confirmation: 'wrong',
+  })
+  check('publishing without the typed course code → 400', () =>
+    assert.equal(partial.res.status, 400),
+  )
+
+  const incomplete = await send('POST', '/api/admin/exams/marks/publish/', {
+    confirmation: 'CSE-301',
+  })
+  check('publishing with empty marks → 409', () => {
+    assert.equal(incomplete.res.status, 409)
+    assert.equal((incomplete.body as { code: string }).code, 'incomplete')
+  })
+
+  const fill = await send('PATCH', '/api/admin/exams/marks/', {
+    entries: [
+      { studentId: 'mstu-2', marks: 22 },
+      { studentId: 'mstu-4', marks: 19 },
+      { studentId: 'nobody', marks: 5 },
+    ],
+  })
+  check('marks save partially, rejecting an unenrolled student', () => {
+    const r = fill.body as { saved: number; rejected: unknown[] }
+    assert.equal(r.saved, 2)
+    assert.equal(r.rejected.length, 1)
+  })
+
+  const published = await send('POST', '/api/admin/exams/marks/publish/', {
+    confirmation: 'CSE-301',
+  })
+  check('a complete sheet publishes and audits', () => {
+    assert.equal(published.res.status, 200)
+    assert.equal((published.body as { publishedCount: number }).publishedCount, 5)
+  })
+
+  const locked = await send('PATCH', '/api/admin/exams/marks/', {
+    entries: [{ studentId: 'mstu-0', marks: 30 }],
+  })
+  check('the sheet locks once published', () => {
+    assert.equal(locked.res.status, 409)
+    assert.equal((locked.body as { code: string }).code, 'locked')
+  })
 }
 
 console.log(failures === 0 ? '\nall checks passed\n' : `\n${failures} check(s) failed\n`)

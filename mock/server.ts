@@ -37,6 +37,7 @@ import type {
 } from '../src/types/index.ts'
 import * as D from './data.ts'
 import * as F from './faculty-data.ts'
+import * as A from './admin-data.ts'
 
 const PORT = Number(Bun.env.MOCK_PORT ?? 8787)
 const BASE_LATENCY = Number(Bun.env.MOCK_LATENCY ?? 250)
@@ -952,6 +953,304 @@ POST('/api/faculty/library/:id/reserve/', ({ req, params }) => {
   )
 })
 
+// ===========================================================================
+// Admin
+// ===========================================================================
+
+serve('/api/admin/dashboard/', A.DASHBOARD)
+serve('/api/admin/academic/', A.ACADEMIC)
+serve('/api/admin/exams/', A.EXAM_HUB)
+serve('/api/admin/finance/', A.FINANCE)
+serve('/api/admin/health/', A.HEALTH)
+
+// ------------------------------------------------------------------- users
+
+GET('/api/admin/users/', ({ req, query }) => {
+  const q = (query.get('q') ?? '').toLowerCase()
+  const role = query.get('role')
+  const status = query.get('status')
+
+  const rows = A.USERS.map((u) => ({ ...u, ...A.USER_OVERRIDES[u.id] })).filter(
+    (u) =>
+      (!q || u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.reference.toLowerCase().includes(q)) &&
+      (!role || role === 'ALL' || u.role === role) &&
+      (!status || status === 'ALL' || u.status === status),
+  )
+
+  const page = paginate(rows, query, '/api/admin/users/')
+  return json({ metrics: A.USER_METRICS, ...page }, 200, req)
+})
+
+POST('/api/admin/users/', async ({ req }) => {
+  const input = await body<{ fullName?: string; email?: string; role?: string; departmentId?: string | null }>(req)
+  if (!input.fullName?.trim()) return fail(400, { fullName: ['This field may not be blank.'] }, req)
+  if (!input.email?.includes('@')) return fail(400, { email: ['Enter a valid email address.'] }, req)
+  if (A.USERS.some((u) => u.email === input.email)) {
+    return fail(409, { detail: 'A user with that email already exists.', code: 'duplicate_email' }, req)
+  }
+  return json(
+    {
+      id: nextId('usr'),
+      reference: `U-${2000 + seq}`,
+      fullName: input.fullName,
+      email: input.email,
+      role: input.role ?? 'student',
+      department: A.DEPARTMENTS.find((d) => d.id === input.departmentId) ?? null,
+      status: 'INVITED',
+      lastActiveAt: null,
+    },
+    201,
+    req,
+  )
+})
+
+GET('/api/admin/users/:id/security/', ({ req, params }) => {
+  const profile = A.securityProfile(params.id!)
+  return profile ? json(profile, 200, req) : notFound(req)
+})
+
+PATCH('/api/admin/users/:id/status/', async ({ req, params }) => {
+  const { status, reason } = await body<{ status?: string; reason?: string }>(req)
+  const user = A.USERS.find((u) => u.id === params.id)
+  if (!user) return notFound(req)
+
+  // A deactivation with no recorded reason is indistinguishable from a
+  // mistake three months later, so the server insists on one.
+  if (status !== 'ACTIVE' && !reason?.trim()) {
+    return fail(400, { reason: ['A reason is required when restricting an account.'] }, req)
+  }
+  A.USER_OVERRIDES[user.id] = { status: status as never }
+
+  return json(
+    {
+      user: { ...user, status },
+      audit: A.audit('USER_STATUS', `${user.fullName} set to ${status}. ${reason ?? ''}`.trim()),
+    },
+    200,
+    req,
+  )
+})
+
+DELETE('/api/admin/users/:id/sessions/:sessionId/', ({ req, params }) => {
+  // The current session cannot be revoked from here — locking yourself out of
+  // the console mid-incident is not a recoverable state.
+  if (params.sessionId!.endsWith('-s1')) {
+    return fail(409, { detail: 'You cannot revoke the session you are using.', code: 'current_session' }, req)
+  }
+  A.REVOKED_SESSIONS.add(params.sessionId!)
+  return json(A.audit('SESSION_REVOKE', `Revoked session ${params.sessionId}`), 200, req)
+})
+
+POST('/api/admin/users/:id/password-reset/', ({ req, params }) => {
+  const user = A.USERS.find((u) => u.id === params.id)
+  if (!user) return notFound(req)
+  return json(A.audit('PASSWORD_RESET', `Reset link sent to ${user.email}`), 200, req)
+})
+
+// -------------------------------------------------------------- admissions
+
+GET('/api/admin/admissions/', ({ req, query }) => {
+  const q = (query.get('q') ?? '').toLowerCase()
+  const status = query.get('status')
+
+  const rows = A.APPLICATIONS.map((a) => ({
+    ...a,
+    status: A.APPLICATION_DECISIONS[a.id] ?? a.status,
+  })).filter(
+    (a) =>
+      (!q || a.applicantName.toLowerCase().includes(q) || a.reference.toLowerCase().includes(q)) &&
+      (!status || status === 'ALL' || a.status === status),
+  )
+
+  const page = paginate(rows, query, '/api/admin/admissions/')
+  return json({ metrics: A.ADMISSION_METRICS, programmes: A.PROGRAMMES, ...page }, 200, req)
+})
+
+GET('/api/admin/admissions/:id/', ({ req, params }) => {
+  const detail = A.applicationDetail(params.id!)
+  return detail ? json(detail, 200, req) : notFound(req)
+})
+
+POST('/api/admin/admissions/:id/decision/', async ({ req, params }) => {
+  const input = await body<{ status?: string; templateId?: string | null; note?: string }>(req)
+  const row = A.APPLICATIONS.find((a) => a.id === params.id)
+  if (!row) return notFound(req)
+
+  const current = A.APPLICATION_DECISIONS[row.id] ?? row.status
+  if (current === 'APPROVED' || current === 'REJECTED') {
+    return fail(409, { detail: `This application was already ${current.toLowerCase()}.`, code: 'already_decided' }, req)
+  }
+  // An approval sends an offer letter, so the template is not optional.
+  if (input.status === 'APPROVED' && !input.templateId) {
+    return fail(400, { templateId: ['Choose an offer letter template.'] }, req)
+  }
+  if (input.status !== 'APPROVED' && input.templateId) {
+    return fail(400, { templateId: ['A template only applies to an approval.'] }, req)
+  }
+
+  A.APPLICATION_DECISIONS[row.id] = input.status as never
+  return json(
+    {
+      application: { ...row, status: input.status, reviewerName: 'System Admin' },
+      audit: A.audit('ADMISSION_DECISION', `${row.reference} ${String(input.status).toLowerCase()}`),
+      notificationQueued: true,
+    },
+    200,
+    req,
+  )
+})
+
+// ----------------------------------------------------------- exam schedule
+
+GET('/api/admin/exams/schedule/', ({ req }) => json(A.examSchedule(), 200, req))
+
+PATCH('/api/admin/exams/schedule/:slotId/', async ({ req, params }) => {
+  const { hallId, proctorId } = await body<{ hallId?: string | null; proctorId?: string | null }>(req)
+  const slot = A.SLOTS.find((s) => s.id === params.slotId)
+  if (!slot) return notFound(req)
+
+  const hall = A.HALLS.find((h) => h.id === hallId)?.name ?? null
+  const proctor = A.PROCTORS.find((p) => p.id === proctorId)?.name ?? null
+
+  // A hall already taken at the same instant is a clash, not a preference.
+  const clash = A.SLOTS.find(
+    (s) =>
+      s.id !== slot.id &&
+      s.startsAt === slot.startsAt &&
+      hall !== null &&
+      (A.SLOT_OVERRIDES[s.id]?.hall ?? s.hall) === hall,
+  )
+  if (clash) {
+    return fail(
+      409,
+      { detail: `${hall} is already assigned to ${clash.course.code} at that time.`, code: 'hall_clash' },
+      req,
+    )
+  }
+
+  A.SLOT_OVERRIDES[slot.id] = { hall, proctorName: proctor }
+  return json(A.examSchedule(), 200, req)
+})
+
+// ------------------------------------------------------------- marks entry
+
+GET('/api/admin/exams/marks/', ({ req }) => json(A.marksEntry(), 200, req))
+
+PATCH('/api/admin/exams/marks/', async ({ req }) => {
+  const { entries } = await body<{ entries?: { studentId: string; marks: number | null }[] }>(req)
+  if (!entries?.length) return fail(400, { entries: ['Nothing to save.'] }, req)
+  if (A.MARKS_STATUS === 'PUBLISHED') {
+    return fail(409, { detail: 'Results are published; the sheet is locked.', code: 'locked' }, req)
+  }
+
+  const max = 30
+  const rejected: { studentId: string; reason: string }[] = []
+  let saved = 0
+  for (const e of entries) {
+    if (!(e.studentId in A.MARKS)) {
+      rejected.push({ studentId: e.studentId, reason: 'Not enrolled in this section.' })
+      continue
+    }
+    if (e.marks !== null && (e.marks < 0 || e.marks > max)) {
+      rejected.push({ studentId: e.studentId, reason: `Must be between 0 and ${max}.` })
+      continue
+    }
+    A.MARKS[e.studentId] = e.marks
+    saved++
+  }
+  return json({ saved, rejected }, 200, req)
+})
+
+POST('/api/admin/exams/marks/publish/', async ({ req }) => {
+  const { confirmation } = await body<{ confirmation?: string }>(req)
+  const sheet = A.marksEntry()
+
+  // Publishing is irreversible and reaches every student in the section at
+  // once, so it needs the course code typed out, not a single click.
+  if (confirmation !== sheet.course.code) {
+    return fail(400, { confirmation: [`Type ${sheet.course.code} to confirm.`] }, req)
+  }
+  const missing = sheet.rows.filter((r) => r.marks === null)
+  if (missing.length) {
+    return fail(409, { detail: `${missing.length} student(s) have no mark.`, code: 'incomplete' }, req)
+  }
+
+  A.setMarksStatus('PUBLISHED')
+  return json(
+    {
+      publishedCount: sheet.rows.length,
+      audit: A.audit('MARKS_PUBLISH', `${sheet.course.code} ${sheet.assessment.label} published`),
+    },
+    200,
+    req,
+  )
+})
+
+// ------------------------------------------------------------ finance ledger
+
+GET('/api/admin/finance/ledger/', ({ req, query }) => {
+  const direction = query.get('direction')
+  const rows = A.LEDGER.filter(
+    (e) => !direction || direction === 'ALL' || (direction === 'IN' ? e.inbound : !e.inbound),
+  )
+  return json({ results: rows, nextCursor: null }, 200, req)
+})
+
+// ---------------------------------------------------------------- settings
+
+GET('/api/admin/settings/', ({ req }) => json(A.SETTINGS, 200, req))
+
+route('PUT', '/api/admin/settings/', async ({ req }) => {
+  const input = await body<{ version?: string; institution?: never; term?: never; toggles?: { key: string; enabled: boolean }[] }>(req)
+
+  // Optimistic lock: two admins on the same page must not silently clobber.
+  if (input.version !== A.SETTINGS.version) {
+    return fail(
+      409,
+      { detail: 'Settings changed since you loaded this page. Reload and reapply.', code: 'stale_version' },
+      req,
+    )
+  }
+
+  const next = {
+    ...A.SETTINGS,
+    version: `v${Number(A.SETTINGS.version.slice(1)) + 1}`,
+    institution: input.institution ?? A.SETTINGS.institution,
+    term: { ...A.SETTINGS.term, ...(input.term ?? {}) },
+    toggles: A.SETTINGS.toggles.map((t) => ({
+      ...t,
+      enabled: input.toggles?.find((x) => x.key === t.key)?.enabled ?? t.enabled,
+    })),
+  }
+  A.setSettings(next)
+
+  return json({ settings: next, audit: A.audit('SETTINGS_SAVE', 'Institution settings updated') }, 200, req)
+})
+
+// ----------------------------------------------------------------- support
+
+GET('/api/admin/support/', ({ req }) =>
+  json(
+    {
+      ...A.SUPPORT,
+      tickets: A.SUPPORT.tickets.map((t) => ({
+        ...t,
+        status: A.TICKET_OVERRIDES[t.id] ?? t.status,
+      })),
+    },
+    200,
+    req,
+  ),
+)
+
+PATCH('/api/admin/support/tickets/:id/', async ({ req, params }) => {
+  const { status } = await body<{ status?: string }>(req)
+  const ticket = A.SUPPORT.tickets.find((t) => t.id === params.id)
+  if (!ticket) return notFound(req)
+  A.TICKET_OVERRIDES[ticket.id] = status as never
+  return json({ ...ticket, status, updatedAt: new Date().toISOString() }, 200, req)
+})
+
 // ---------------------------------------------------------------- pagination
 
 function paginate<T>(rows: T[], query: URLSearchParams, path: string) {
@@ -998,6 +1297,7 @@ const server = Bun.serve({
     if (
       url.pathname.startsWith('/api/student/') ||
       url.pathname.startsWith('/api/faculty/') ||
+      url.pathname.startsWith('/api/admin/') ||
       url.pathname === '/api/me/'
     ) {
       if (!roleFromAuth(req)) {

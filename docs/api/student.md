@@ -15,175 +15,18 @@ document is usable on its own.
 
 ## 1. Conventions
 
-### 1.1 Base, versioning, trailing slashes
+Base URL, data formats, envelopes, transport, compression, caching, errors and
+auth are the same for all three personas and live in
+**[general.md](general.md)**. Read that first; this document covers only what
+is specific to students.
 
-```
-{VITE_API_URL}/api/student/<module>/<resource>/
-```
+The two that come up most often here:
 
-- **Trailing slash is mandatory.** Django's `APPEND_SLASH` 301-redirects
-  otherwise, and a redirected POST loses its body in some clients.
-- **No `/v1/`.** One frontend, one backend, deployed together. A version
-  segment we never bump is decoration. When a breaking change is genuinely
-  needed, add `/api/v2/<that endpoint>` — per endpoint, not per API.
-- `VITE_API_URL` unset → the app uses relative URLs and the dev login in
-  [`src/lib/dev-auth.ts`](../../src/lib/dev-auth.ts). Set it to point at the
-  mock server or the real backend.
-
-### 1.2 Data formats
-
-The wire carries values. The UI carries strings. Nothing arrives
-pre-formatted — `'Oct 24, 2023'` and `'৳48,500.00'` are UI output, not API
-output. Everything renders through [`src/lib/format.ts`](../../src/lib/format.ts).
-
-| Concept | Wire | Type | Renders with |
-|---|---|---|---|
-| Instant | `"2026-05-25T18:00:00Z"` — always UTC, always `Z` | `ISODateTime` | `dateTime()`, `time()`, `relative()` |
-| Calendar date | `"2026-05-25"` | `ISODate` | `date()`, `dateShort()` |
-| Wall-clock time | `"14:30"` — timetable slots, no zone | `TimeOfDay` | rendered as-is |
-| Money | `"48500.00"` — decimal **string** | `Money` | `money()` |
-| Duration | `5400` — seconds | `number` | `duration()` |
-| File size | `4404019` — bytes | `number` | `fileSize()` |
-| Percent | `78` — 0–100, never 0–1 | `number` | `percent()` |
-| GPA / points | `3.88` — number | `number` | `gpa()` |
-| Enum | `"DUE_SOON"` — SCREAMING_SNAKE | union type | mapped in the component |
-| Id | `"asg-2"` — opaque string | `Id` | never displayed |
-
-**Why money is a string.** DRF serialises `DecimalField` to a string by
-default, and floats lose paisa when summed: `0.1 + 0.2 !== 0.3`. `money()`
-takes `Money | number`, so nothing at the call site changes. Never do
-arithmetic on the client — if you need a total, the server sends one.
-
-**Why UTC only.** The portal is single-campus today, but a student on
-exchange reading `18:00` for a `18:00 Asia/Dhaka` exam is a missed exam.
-`Intl` converts to the viewer's zone for free.
-
-**Nulls, not sentinels.** An ungraded course sends `grade: null`, not
-`"N/A"`. `"N/A"` is a language choice; `null` is a fact. Optional fields are
-`T | null` in responses (always present, sometimes empty) and `?:` in request
-bodies (omittable).
-
-**Two id fields where humans read one.** `Invoice.id` is `"inv-2"`;
-`Invoice.number` is `"INV-4402"`. The first addresses the row, the second is
-printed on the document. Never route on the human one.
-
-### 1.3 Envelopes
-
-Single resources are returned bare — no `{ "data": ... }` wrapper. The status
-code already says whether it worked, and a wrapper is a field to unwrap on
-every one of 61 endpoints.
-
-Lists that can outgrow a screen use DRF's `PageNumberPagination` shape,
-because that is what the backend produces by default:
-
-```ts
-Paginated<T> = { count: number; next: string | null; previous: string | null; results: T[] }
-```
-
-`next`/`previous` are absolute URLs. Pass them back to `apiFetch` verbatim;
-do not rebuild them from a page number.
-
-Feeds where rows are inserted while you page — forum threads, payment
-history — use `Cursored<T>` instead. Offset pagination on a live feed either
-skips a row or shows it twice.
-
-Bounded lists (six metrics, five timetable slots, four installment steps) are
-plain arrays inside the screen payload. Paginating them would be ceremony.
-
-### 1.4 Transport: JSON, and compression at the edge
-
-**Wire format is JSON.** Not MessagePack, not protobuf. The largest student
-payload is the faculty directory at ~6 KB uncompressed; `JSON.parse` is
-native and faster than any userland decoder at this size, DRF speaks it
-natively, and it is debuggable in the network tab. A binary format here would
-cost a schema pipeline and buy nothing measurable.
-
-**Compression is HTTP-level and not the application's job.** Set it on the
-reverse proxy (nginx / Cloudflare):
-
-```
-Content-Encoding: br      # gzip fallback for older clients
-Vary: Accept-Encoding
-gzip_min_length 1024      # below this, framing costs more than it saves
-```
-
-JSON compresses 6–10× because it is mostly repeated keys. Never compress in
-a Django view — you would lose streaming, break `Content-Length`, and
-duplicate what the proxy already does.
-
-The mock server implements exactly this rule (`GZIP_MIN_BYTES = 1024`,
-`Vary: Accept-Encoding`) so dev numbers match production. `bun run mock:test`
-asserts the negotiation.
-
-**Never compress:** PDFs, images, video, ZIPs. Already compressed; gzipping
-them burns CPU to add bytes. Stream them with `Content-Type` set and let the
-proxy skip them by MIME type.
-
-**Not applicable here:** BREACH-style attacks need a secret reflected in a
-compressed response body plus attacker-controlled input in the same body.
-This API authenticates with a bearer header, not a cookie, and never echoes
-request input into a response containing a token.
-
-### 1.5 Caching
-
-| Class | Endpoints | Header |
-|---|---|---|
-| Per-student, changes rarely | curriculum, calendar, certificates | `Cache-Control: private, max-age=300` + `ETag` |
-| Per-student, live | dashboard, attendance, assignments | `Cache-Control: private, no-cache` + `ETag` |
-| Money | invoices, payments, statement | `Cache-Control: private, no-store` |
-| Signed file URLs | attachments, PDFs, video | `no-store` on the JSON; the URL itself is short-lived |
-
-`ETag` + `If-None-Match` turns an unchanged 6 KB response into a 304 with no
-body. Worth wiring on the first list; not worth wiring on all 61 up front.
-
-### 1.6 Errors
-
-DRF's shape. Field errors and the non-field `detail` arrive in one object:
-
-```jsonc
-{ "detail": "Not found." }                                  // 404
-{ "detail": "Given token not valid…", "code": "token_not_valid" }  // 401
-{ "amount": ["Cannot exceed the outstanding 48500.00."] }   // 400, field error
-{ "detail": "No seats remaining.", "code": "seat_unavailable" } // 409
-```
-
-`ApiError` from [`use-api.ts`](../../src/hooks/use-api.ts) carries `.status`
-and `.body`. Branch on `code` when present — never on the human-readable
-`detail`, which is copy and will change.
-
-| Status | Means | UI does |
-|---|---|---|
-| 400 | Validation failed | Field errors under the inputs |
-| 401 | Token dead | `apiFetch` refreshes and retries once, then signs out |
-| 403 | Authenticated, not allowed | Full-page "not available for your account" |
-| 404 | No such resource | Empty state, not an error state |
-| 409 | Conflict — seat gone, already submitted | Toast + refetch; **rolls back an optimistic update** |
-| 422 | Semantically invalid but well-formed | Same as 400 |
-| 429 | Rate limited (AI endpoints) | Disable the trigger, show the retry window |
-| 5xx | Ours | Retry with backoff, then error state |
-
-### 1.7 Auth
-
-SimpleJWT, matching what [`src/lib/auth.ts`](../../src/lib/auth.ts) already
-decodes:
-
-| | |
-|---|---|
-| `POST /api/token/` | `TokenRequest` → `TokenResponse` |
-| `POST /api/token/refresh/` | `RefreshRequest` → `RefreshResponse` |
-| `GET /api/me/` | → `Me` |
-
-Every `/api/student/*` request carries `Authorization: Bearer <access>`.
-`apiFetch` attaches it, and on 401 refreshes once and retries — concurrent
-401s share one in-flight refresh rather than stampeding.
-
-**The access token must carry a `role` claim.** SimpleJWT does not emit it;
-without it the app cannot pick a shell and treats the session as
-unauthenticated. See [architecture.md §5](../architecture.md#5-data).
-
-`GET /api/me/` exists because the JWT is a summary. Registration number,
-programme, avatar, and the active term belong in a response body that can
-change without minting a new token.
+- **The wire carries values, not strings.** ISO-8601 UTC instants, decimal
+  money strings, bytes, seconds, `null` instead of `"N/A"`. Formatting happens
+  at the edge with [`src/lib/format.ts`](../../src/lib/format.ts).
+- **Errors are DRF-shaped.** `ApiError.body` is field-keyed; branch on `code`
+  when present, never on the human-readable `detail`.
 
 ---
 
@@ -621,69 +464,40 @@ resolves.
 
 ## 8. Mock server
 
-```sh
-bun run mock        # http://localhost:8787, --watch
-bun run mock:test   # every route + the write paths + failure injection
-```
-
-Point the app at it:
-
-```sh
-VITE_API_URL=http://localhost:8787 bun run dev
-```
-
-Sign in as `student`, `faculty`, or `admin` with any password.
-
-| Knob | Effect |
-|---|---|
-| `?_delay=1200` | Hold the response — see skeletons and optimistic patches |
-| `?_fail=409` | Return that status instead of the payload — see rollbacks |
-| `?_fail=500&_delay=900` | Fail *after* the delay — the only way to watch a patch sit, then revert |
-| `MOCK_LATENCY=0` | Baseline latency (default 250ms) |
-| `MOCK_ACCESS_TTL=20` | Short access tokens, to exercise 401 → refresh → retry |
-| `MOCK_PORT=9000` | Port |
-
-It is stateful in memory: notes, forum replies, revaluation requests,
-registration, read-receipts and payments all persist until restart, so
-mutations are visible on the next read. Restart to reset.
-
-What it deliberately does **not** do: enforce authorisation beyond "is there
-a live token", validate exhaustively, or persist. It is a contract to build
-against, not a second implementation of the registrar.
+See **[general.md §8](general.md#8-mock-server)** — same server, same knobs,
+same `bun run mock`. Student state that persists until restart: notes, forum
+replies, revaluation requests, registration, read-receipts and payments.
 
 ---
 
-## 9. Migrating a module off fixtures
+## 9. How the migration went
 
-**All eight student modules are across** — dashboard, academic, LMS,
-attendance, exams, finance, AI, and certificates all talk to the real fetch
-path. `src/lib/fixtures.ts` now only backs faculty and admin.
-
-The recipe below is what was applied, and is what faculty and admin will
-follow when their contracts land:
+**Every student screen is on the real fetch path.** `src/lib/fixtures.ts` no
+longer exists. The recipe below is what was applied, kept because it is the
+shortest description of how the wire contract differs from the fixtures it
+replaced:
 
 1. **Swap the hook** — `useFixture(key, {…})` → `useGetData<T>(path, key)`,
    with `T` from `@/types`. One line per hook, in `api.ts` only.
-2. **Delete the inline payload** — it now lives in [`mock/data.ts`](../../mock/data.ts).
-3. **Move formatting to the edge** — the wire sends `dueAt`, not
+2. **Move formatting to the edge** — the wire sends `dueAt`, not
    `'Oct 24, 2023'`. Use `date()` / `relative()` / `money()` from
    `lib/format.ts` in the component.
-4. **Follow the nesting** — `c.name` becomes `c.course.title`,
-   `c.teacher` becomes `c.instructorName`.
-5. **Nulls, not sentinels** — `grade === 'N/A'` becomes `grade === null`.
-6. **Pull the assistant out** — delete the `assistant` prop, render
+3. **Follow the nesting** — `c.name` became `c.course.title`, `c.teacher`
+   became `c.instructorName`.
+4. **Nulls, not sentinels** — `grade === 'N/A'` became `grade === null`.
+5. **Pull the assistant out** — the `assistant` prop became
    `<ConnectedAssistant context="…" />`.
-7. `bunx tsc -b` — the types catch every site you missed.
+6. `bunx tsc -b` — the types catch every site you missed.
 
-Two things the migration changed beyond the data layer, both worth knowing:
+Two things it changed beyond the data layer, both worth knowing:
 
-- **Generator screens no longer render content on mount.** Study Planner, Note
-  Generator, Quiz Generator and Assignment Helper show their form and an empty
-  state until the student presses Generate. Auto-running a model call on
-  navigation would bill for output nobody asked for.
+- **Generator screens no longer render content on mount.** Study Planner,
+  Note Generator, Quiz Generator and Assignment Helper show their form and an
+  empty state until the student presses Generate. Auto-running a model call
+  on navigation would bill for output nobody asked for.
 - **Fixture copy that was never per-student is now a constant in the
-  component** — the certificates print blurb, the "Ready to Prepare?" CTA.
-  It was never data, and putting it on the wire made it look like it was.
+  component** — the certificates print blurb, the "Ready to Prepare?" CTA. It
+  was never data, and putting it on the wire made it look like it was.
 
 ---
 

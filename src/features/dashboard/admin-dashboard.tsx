@@ -3,6 +3,7 @@ import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { MetricCard, type MetricTone } from '@/components/patterns/metric-card'
 import { ProgressBar } from '@/components/patterns/progress-bar'
 import { QueryState } from '@/components/states'
+import { dateShort, money, relative, time } from '@/lib/format'
 import { useAdminDashboard } from './api'
 import { iconFor } from './icon-map'
 
@@ -51,7 +52,7 @@ export function AdminDashboard() {
               <CardBody>
                 <div className="h-[280px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={d.enrollment} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
+                    <LineChart data={d.enrolment} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
                       <CartesianGrid vertical={false} strokeDasharray="4 4" stroke="var(--color-border)" />
                       <XAxis
                         dataKey="month"
@@ -96,7 +97,7 @@ export function AdminDashboard() {
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="pointer-events-none absolute inset-0 grid place-content-center text-center">
-                      <p className="text-card-title">{d.totalStudents}</p>
+                      <p className="text-card-title">{(d.totalStudents / 1000).toFixed(1)}k</p>
                       <p className="text-eyebrow uppercase text-fg-muted">Total</p>
                     </div>
                   </div>
@@ -121,16 +122,18 @@ export function AdminDashboard() {
                 <CardHeader title="Recent Announcements" />
                 <CardBody className="flex flex-col gap-4">
                   {d.announcements.map((a) => (
-                    <div key={a.title} className="border-l-2 border-nav-active-student pl-3">
+                    <div key={a.id} className="border-l-2 border-nav-active-student pl-3">
                       <p className="text-link text-fg-heading">{a.title}</p>
-                      <p className="text-fg-muted">{a.meta}</p>
+                      <p className="text-fg-muted">
+                        {a.note} • {relative(a.publishedAt)}
+                      </p>
                     </div>
                   ))}
 
                   <div className="mt-2 grid grid-cols-3 gap-3 border-t border-border pt-4">
                     {d.systems.map((s) => (
                       <div
-                        key={s.label}
+                        key={s.id}
                         className="grid place-items-center gap-1 rounded-control bg-success-bg/60 p-3"
                       >
                         <span
@@ -154,7 +157,7 @@ export function AdminDashboard() {
                 <p className="text-fg-muted">Year-to-Date Fee Collection Status</p>
                 <p className="mt-4 text-eyebrow uppercase text-fg-muted">Collected</p>
                 <div className="flex items-baseline justify-between">
-                  <p className="text-metric text-fg-heading">{d.financial.collected}</p>
+                  <p className="text-metric text-fg-heading">{money(d.financial.collected)}</p>
                   <p className="text-link text-brand-700">{d.financial.percent}% Goal</p>
                 </div>
                 <ProgressBar
@@ -162,20 +165,28 @@ export function AdminDashboard() {
                   className="mt-3"
                   label="Fee collection against target"
                 />
-                <p className="mt-2 text-right text-fg-muted">Target: {d.financial.target}</p>
+                <p className="mt-2 text-right text-fg-muted">
+                  Target: {money(d.financial.target)}
+                </p>
               </CardBody>
             </Card>
 
             <Card>
               <CardHeader title="Top Departments" />
               <CardBody className="flex flex-col gap-4">
-                {d.departments.map((dept) => (
-                  <div key={dept.name}>
+                {d.departments.map((row) => (
+                  <div key={row.department.id}>
                     <div className="mb-1.5 flex items-baseline justify-between">
-                      <span className="text-link text-fg-heading">{dept.name}</span>
-                      <span className="text-fg-muted">{dept.students}</span>
+                      <span className="text-link text-fg-heading">{row.department.name}</span>
+                      <span className="text-fg-muted">
+                        {row.students.toLocaleString()} students
+                      </span>
                     </div>
-                    <ProgressBar value={dept.percent} tone={dept.tone} label={`${dept.name} enrolment`} />
+                    <ProgressBar
+                      value={row.percent}
+                      tone={row.tone}
+                      label={`${row.department.name} enrolment`}
+                    />
                   </div>
                 ))}
               </CardBody>
@@ -184,18 +195,24 @@ export function AdminDashboard() {
             <Card>
               <CardHeader title="Upcoming Events" />
               <CardBody className="flex flex-col gap-4">
-                {d.events.map((e) => (
-                  <div key={e.title} className="flex gap-4">
-                    <div className="grid size-12 shrink-0 place-content-center rounded-control bg-brand-700 text-center text-brand-fg">
-                      <span className="text-eyebrow uppercase">{e.month}</span>
-                      <span className="text-link">{e.day}</span>
+                {d.events.map((e) => {
+                  // `25 May` -> ['25', 'May'] for the two-line date block.
+                  const [day, month] = dateShort(e.startsAt).split(' ')
+                  return (
+                    <div key={e.id} className="flex gap-4">
+                      <div className="grid size-12 shrink-0 place-content-center rounded-control bg-brand-700 text-center text-brand-fg">
+                        <span className="text-eyebrow uppercase">{month}</span>
+                        <span className="text-link">{day}</span>
+                      </div>
+                      <div>
+                        <p className="text-link text-fg-heading">{e.title}</p>
+                        <p className="text-fg-muted">
+                          {e.note} • {time(e.startsAt)}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-link text-fg-heading">{e.title}</p>
-                      <p className="text-fg-muted">{e.meta}</p>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </CardBody>
             </Card>
           </div>
