@@ -15,11 +15,14 @@ Design and build documentation for **UniGPT** — an AI-native university portal
 | [screen-inventory.md](screen-inventory.md) | All 93 frames → node IDs → routes, canonical vs superseded | Picking up a screen; wiring routes; pulling a frame from Figma |
 | [architecture.md](architecture.md) | Stack, directory layout, routing, data layer, conventions | Deciding where a file goes or how to fetch something |
 | [api/student.md](api/student.md) | **Wire contract.** Every student endpoint, request/response types, optimistic-UI policy, transport | Wiring a student screen to the API; briefing the backend dev |
+| [api/faculty.md](api/faculty.md) | Faculty endpoints — section scoping, whole-object writes, why almost nothing is optimistic | Wiring a faculty screen; anything that writes to a student's record |
 | [build-plan.md](build-plan.md) | 7 phases, tasks, dependencies, definitions of done | Planning a sprint; knowing what's next |
 
-`api/faculty.md`, `api/admin.md` and `api/general.md` follow the same shape;
-the persona-neutral conventions live in [api/student.md §1](api/student.md)
-until there are three of them to share.
+`api/admin.md` follows the same shape. The persona-neutral conventions
+(formats, envelopes, transport, errors, auth) live in
+[api/student.md §1](api/student.md) and are referenced rather than repeated;
+they lift out to `api/general.md` once admin lands and there are three
+consumers.
 
 ## Order to read them
 
@@ -67,6 +70,7 @@ VITE_API_URL=http://localhost:8787 bun run dev  # app against it
 bun run mock:test                               # verify the mock still matches the contract
 ```
 
-All 61 student read endpoints and 23 writes are live, typed against
-`src/types`. The student dashboard is already on it; the remaining modules
-are a mechanical swap per [api/student.md §9](api/student.md).
+All 61 student read endpoints and 23 writes are live, plus 15 faculty reads
+and 8 writes, typed against `src/types`. Every student screen is on the real
+fetch path; faculty screens are next per
+[api/student.md §9](api/student.md).

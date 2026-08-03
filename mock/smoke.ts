@@ -23,6 +23,13 @@ const SAMPLES: Record<string, string> = {
   id: 'th-1',
 }
 
+/** Faculty routes reuse `:id` for different things, so they get their own map. */
+const FACULTY_SAMPLES: Record<string, string> = {
+  '/api/faculty/sections/:id/': 'sec-1',
+  '/api/faculty/assignments/:id/submissions/': 'fasg-1',
+  '/api/faculty/submissions/:id/': 'sub-1',
+}
+
 /**
  * Routes the generic loop cannot guess: a required query param, or an id that
  * only exists once something has been created. Value is appended to the URL,
@@ -108,7 +115,10 @@ for (const r of getRoutes) {
   const template = `/${r.segments.join('/')}/`
   if (template in READ_OVERRIDES && READ_OVERRIDES[template] === null) continue
 
-  const path = `/${r.segments.map((s) => (s.startsWith(':') ? SAMPLES[s.slice(1)] ?? 'x' : s)).join('/')}/`
+  const sample = FACULTY_SAMPLES[template]
+  const path = sample
+    ? template.replace(/:[^/]+/, sample)
+    : `/${r.segments.map((s) => (s.startsWith(':') ? SAMPLES[s.slice(1)] ?? 'x' : s)).join('/')}/`
   const { res, body } = await get(path, READ_OVERRIDES[template] ?? '')
   check(`GET ${path}`, () => {
     assert.equal(res.status, 200, `status ${res.status}`)
@@ -296,6 +306,108 @@ console.log('\ntransport')
     assert.equal(res.status, 404)
     assert.equal(typeof b.detail, 'string')
   })
+}
+
+console.log('\nfaculty writes')
+
+{
+  // Faculty writes land on a student's transcript, so the server refuses
+  // anything partial. These four are the guardrails, not edge cases.
+  const partialRubric = await send('PUT', '/api/faculty/submissions/sub-1/grade/', {
+    scores: [{ criterionId: 'rub-1', points: 30 }],
+    feedback: 'good',
+    release: true,
+  })
+  check('grading with a partial rubric → 400', () => assert.equal(partialRubric.res.status, 400))
+
+  const overMax = await send('PUT', '/api/faculty/submissions/sub-1/grade/', {
+    scores: [
+      { criterionId: 'rub-1', points: 999 },
+      { criterionId: 'rub-2', points: 20 },
+      { criterionId: 'rub-3', points: 15 },
+      { criterionId: 'rub-4', points: 10 },
+    ],
+    feedback: 'x',
+    release: false,
+  })
+  check('a mark above the criterion max → 400', () => assert.equal(overMax.res.status, 400))
+
+  const good = await send('PUT', '/api/faculty/submissions/sub-1/grade/', {
+    scores: [
+      { criterionId: 'rub-1', points: 36 },
+      { criterionId: 'rub-2', points: 22 },
+      { criterionId: 'rub-3', points: 18 },
+      { criterionId: 'rub-4', points: 13 },
+    ],
+    feedback: 'Solid work; watch the deletion case.',
+    release: true,
+  })
+  check('a complete rubric grades to 89 → A-', () => {
+    assert.equal(good.res.status, 200)
+    const r = good.body as { totalScore: number; grade: string; released: boolean }
+    assert.equal(r.totalScore, 89)
+    assert.equal(r.grade, 'A-')
+    assert.equal(r.released, true)
+  })
+}
+
+{
+  const partial = await send('PUT', '/api/faculty/attendance/ses-sec-1-x/', {
+    marks: [{ studentId: 'stu-1', mark: 'PRESENT' }],
+  })
+  check('a partial roster → 400 (unmarked is not absent)', () =>
+    assert.equal(partial.res.status, 400),
+  )
+
+  const full = await send('PUT', '/api/faculty/attendance/ses-sec-1-x/', {
+    marks: [
+      { studentId: 'stu-1', mark: 'PRESENT' },
+      { studentId: 'stu-2', mark: 'PRESENT' },
+      { studentId: 'stu-3', mark: 'ABSENT' },
+      { studentId: 'stu-4', mark: 'LATE' },
+      { studentId: 'stu-5', mark: 'EXCUSED' },
+    ],
+  })
+  check('a full roster submits; LATE counts as present', () => {
+    assert.equal(full.res.status, 200)
+    const r = full.body as { presentCount: number; totalCount: number }
+    assert.equal(r.presentCount, 3)
+    assert.equal(r.totalCount, 5)
+  })
+}
+
+{
+  const res = await send('PATCH', '/api/faculty/gradebook/', {
+    entries: [
+      { studentId: 'stu-1', columnId: 'col-3', points: 44 },
+      { studentId: 'stu-2', columnId: 'col-3', points: 999 },
+      { studentId: 'stu-3', columnId: 'col-nope', points: 10 },
+    ],
+  })
+  check('gradebook saves good cells and reports bad ones', () => {
+    assert.equal(res.res.status, 200)
+    const r = res.body as { saved: number; rejected: unknown[] }
+    assert.equal(r.saved, 1, 'the valid cell should have landed')
+    assert.equal(r.rejected.length, 2, 'both bad cells should come back with reasons')
+  })
+
+  const sheet = await get('/api/faculty/gradebook/', '&sectionId=sec-1')
+  check('the saved cell persists and completes the row total', () => {
+    const rows = (sheet.body as { rows: { student: { id: string }; total: number | null }[] }).rows
+    assert.equal(rows.find((r) => r.student.id === 'stu-1')?.total, 90)
+    assert.equal(rows.find((r) => r.student.id === 'stu-2')?.total, null, 'rejected cell must not persist')
+  })
+}
+
+{
+  const res = await send('PATCH', '/api/faculty/profile/', { designation: 'Dean' })
+  check('editing a registrar-owned field → 403', () => {
+    assert.equal(res.res.status, 403)
+    assert.equal((res.body as { code: string }).code, 'read_only_field')
+  })
+
+  const ok = await send('PATCH', '/api/faculty/profile/', { officeRoom: 'Room 210' })
+  check('editing a self-owned field succeeds', () => assert.equal(ok.res.status, 200))
 }
 
 console.log(failures === 0 ? '\nall checks passed\n' : `\n${failures} check(s) failed\n`)
