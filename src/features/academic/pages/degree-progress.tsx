@@ -5,11 +5,13 @@ import { PageHeader } from '@/components/patterns/page-header'
 import { ProgressBar } from '@/components/patterns/progress-bar'
 import { QueryState } from '@/components/states'
 import { useDegreeProgress } from '../api'
+import { date } from '@/lib/format'
+import type { MilestoneState } from '@/types'
 
-const DOT: Record<string, string> = {
-  done: 'bg-success',
-  current: 'bg-brand-600 ring-4 ring-brand-600/20',
-  upcoming: 'bg-track',
+const DOT: Record<MilestoneState, string> = {
+  DONE: 'bg-success',
+  CURRENT: 'bg-brand-600 ring-4 ring-brand-600/20',
+  UPCOMING: 'bg-track',
 }
 
 /** Degree Progress — Figma 6:9702. */
@@ -41,7 +43,7 @@ export function DegreeProgress() {
               <CardBody>
                 <ol className="flex flex-col">
                   {d.milestones.map((m, i) => (
-                    <li key={m.title} className="flex gap-4">
+                    <li key={m.id} className="flex gap-4">
                       <div className="flex flex-col items-center">
                         <span className={cn('mt-1.5 size-3 shrink-0 rounded-full', DOT[m.state])} aria-hidden />
                         {i < d.milestones.length - 1 && (
@@ -59,20 +61,24 @@ export function DegreeProgress() {
             </Card>
 
             <aside className="flex flex-col gap-6">
-              <Card>
-                <CardHeader title={d.deadline.title} icon={CalendarClock} />
-                <CardBody>
-                  <p className="text-fg-body">{d.deadline.note}</p>
-                </CardBody>
-              </Card>
+              {d.nextDeadline && (
+                <Card>
+                  <CardHeader title={d.nextDeadline.title} icon={CalendarClock} />
+                  <CardBody>
+                    <p className="text-fg-body">Due {date(d.nextDeadline.dueAt)}</p>
+                  </CardBody>
+                </Card>
+              )}
 
-              <div className="rounded-card border border-accent-600/20 bg-accent-600/5 p-4">
-                <p className="mb-1 flex items-center gap-2 text-link text-accent-600">
-                  <Sparkles className="size-4" aria-hidden />
-                  AI Graduation Forecast
-                </p>
-                <p className="text-fg-body">{d.forecast}</p>
-              </div>
+              {d.forecast && (
+                <div className="rounded-card border border-accent-600/20 bg-accent-600/5 p-4">
+                  <p className="mb-1 flex items-center gap-2 text-link text-accent-600">
+                    <Sparkles className="size-4" aria-hidden />
+                    AI Graduation Forecast
+                  </p>
+                  <p className="text-fg-body">{d.forecast}</p>
+                </div>
+              )}
             </aside>
           </div>
         </div>

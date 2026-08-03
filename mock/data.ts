@@ -711,7 +711,8 @@ export function dailyAttendance(date: string): DailyAttendanceResponse {
   }
 }
 
-export function courseAttendance(courseId: string): CourseAttendanceResponse {
+/** No `courseId` means the server picks — see docs/api/student.md §3.4. */
+export function courseAttendance(courseId: string | null): CourseAttendanceResponse {
   const course = Object.values(COURSES).find((x) => x.id === courseId) ?? COURSES.dsa
   return {
     course,

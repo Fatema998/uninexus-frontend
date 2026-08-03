@@ -323,7 +323,7 @@ a missing row reads as a bug.
 |---|---|---|---|
 | GET | `attendance/overview/` | → `AttendanceOverviewResponse` | Overview |
 | GET | `attendance/daily/?date=YYYY-MM-DD` | → `DailyAttendanceResponse` | Daily |
-| GET | `attendance/courses/{courseId}/` | → `CourseAttendanceResponse` | By Course |
+| GET | `attendance/by-course/?courseId=` | → `CourseAttendanceResponse` | By Course |
 | GET | `attendance/history/` | → `AttendanceHistoryResponse` | History |
 | GET | `attendance/analytics/` | → `AttendanceAnalyticsResponse` | Analytics |
 
@@ -332,6 +332,10 @@ no student-facing write here and there must not be one.
 
 `CourseAttendanceResponse.requiredPercent` ships the institutional threshold
 (75) rather than hardcoding it — policy belongs to the registrar.
+
+`courseId` is a query param, not a path segment, because the screen has no
+course picker in the design: omitting it asks the server for the course the
+student is most at risk in.
 
 ### 3.5 Examinations — 9 screens
 
@@ -634,6 +638,7 @@ Sign in as `student`, `faculty`, or `admin` with any password.
 |---|---|
 | `?_delay=1200` | Hold the response — see skeletons and optimistic patches |
 | `?_fail=409` | Return that status instead of the payload — see rollbacks |
+| `?_fail=500&_delay=900` | Fail *after* the delay — the only way to watch a patch sit, then revert |
 | `MOCK_LATENCY=0` | Baseline latency (default 250ms) |
 | `MOCK_ACCESS_TTL=20` | Short access tokens, to exercise 401 → refresh → retry |
 | `MOCK_PORT=9000` | Port |
@@ -650,9 +655,12 @@ against, not a second implementation of the registrar.
 
 ## 9. Migrating a module off fixtures
 
-The student dashboard is already across and is the worked example
-([`features/dashboard/api.ts`](../../src/features/dashboard/api.ts)). Per
-module:
+**All eight student modules are across** — dashboard, academic, LMS,
+attendance, exams, finance, AI, and certificates all talk to the real fetch
+path. `src/lib/fixtures.ts` now only backs faculty and admin.
+
+The recipe below is what was applied, and is what faculty and admin will
+follow when their contracts land:
 
 1. **Swap the hook** — `useFixture(key, {…})` → `useGetData<T>(path, key)`,
    with `T` from `@/types`. One line per hook, in `api.ts` only.
@@ -667,10 +675,15 @@ module:
    `<ConnectedAssistant context="…" />`.
 7. `bunx tsc -b` — the types catch every site you missed.
 
-Modules still on fixtures: academic, lms, attendance, exams, finance, ai,
-certificates. All 60 endpoints they need are already live in the mock server;
-the swap is mechanical and can be done one module at a time without touching
-the others.
+Two things the migration changed beyond the data layer, both worth knowing:
+
+- **Generator screens no longer render content on mount.** Study Planner, Note
+  Generator, Quiz Generator and Assignment Helper show their form and an empty
+  state until the student presses Generate. Auto-running a model call on
+  navigation would bill for output nobody asked for.
+- **Fixture copy that was never per-student is now a constant in the
+  component** — the certificates print blurb, the "Ready to Prepare?" CTA.
+  It was never data, and putting it on the wire made it look like it was.
 
 ---
 

@@ -1,15 +1,22 @@
-import { AssistantPanel } from '@/components/patterns/assistant-panel'
+import { ConnectedAssistant } from '@/components/patterns/assistant-panel'
 import { Badge, type BadgeTone } from '@/components/patterns/badge'
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { MetricCard } from '@/components/patterns/metric-card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { QueryState } from '@/components/states'
 import { useCurriculum } from '../api'
+import type { CurriculumState } from '@/types'
 
-const STATE_TONE: Record<string, BadgeTone> = {
+const STATE_TONE: Record<CurriculumState, BadgeTone> = {
   DONE: 'success',
-  'IN PROGRESS': 'brand',
+  IN_PROGRESS: 'brand',
   REMAINING: 'neutral',
+}
+
+const STATE_LABEL: Record<CurriculumState, string> = {
+  DONE: 'DONE',
+  IN_PROGRESS: 'IN PROGRESS',
+  REMAINING: 'REMAINING',
 }
 
 /** Curriculum — Figma 6:10057. */
@@ -38,24 +45,24 @@ export function Curriculum() {
             <Card>
               <CardHeader title="Programme Courses" />
               <CardBody className="flex flex-col gap-3">
-                {d.courses.map((c) => (
+                {d.entries.map((c) => (
                   <div
-                    key={c.name}
+                    key={c.course.id}
                     className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-border-strong bg-surface p-4"
                   >
                     <div className="min-w-0">
-                      <p className="text-link text-fg-heading">{c.name}</p>
+                      <p className="text-link text-fg-heading">{c.course.title}</p>
                       <p className="text-fg-muted">
-                        {c.dept} • {c.credits} credits
+                        {c.department} • {c.course.credits} credits
                       </p>
                     </div>
-                    <Badge tone={STATE_TONE[c.state]}>{c.state}</Badge>
+                    <Badge tone={STATE_TONE[c.state]}>{STATE_LABEL[c.state]}</Badge>
                   </div>
                 ))}
               </CardBody>
             </Card>
 
-            <AssistantPanel {...d.assistant} />
+            <ConnectedAssistant context="academic.curriculum" />
           </div>
         </div>
       )}

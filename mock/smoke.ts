@@ -246,10 +246,22 @@ console.log('\noptimistic-UI support')
 
 {
   const res = await fetch(`${BASE}/api/student/lms/notes/?_fail=500`, { method: 'POST', headers: auth() })
-  check('?_fail=500 short-circuits the handler', () => assert.equal(res.status, 500))
+  check('?_fail=500 replaces the handler', () => assert.equal(res.status, 500))
 
   const res409 = await fetch(`${BASE}/api/student/lms/notes/?_fail=409`, { headers: auth() })
   check('?_fail=409 works on reads too', () => assert.equal(res409.status, 409))
+
+  // The rollback is only observable if the failure lands *after* the latency —
+  // an instant 500 undoes the optimistic patch before it can be seen.
+  const started = Date.now()
+  const slowFail = await fetch(`${BASE}/api/student/lms/notes/?_fail=500&_delay=400`, {
+    method: 'POST',
+    headers: auth(),
+  })
+  check('_fail waits out _delay before failing', () => {
+    assert.equal(slowFail.status, 500)
+    assert.ok(Date.now() - started >= 400, 'failed instantly; the patch was never visible')
+  })
 }
 
 {

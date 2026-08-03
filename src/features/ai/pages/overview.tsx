@@ -29,9 +29,9 @@ export function AiOverview() {
             <Card>
               <CardHeader title="Quick Academic Actions" />
               <CardBody className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {d.actions.map((a) => (
+                {d.quickActions.map((a) => (
                   <button
-                    key={a.label}
+                    key={a.id}
                     type="button"
                     className="rounded-control border border-border-strong bg-surface p-4 text-left transition-colors hover:bg-surface-subtle"
                   >
@@ -50,10 +50,10 @@ export function AiOverview() {
                   action={{ label: 'Open chat', to: '/student/ai/chat' }}
                 />
                 <CardBody className="flex flex-col gap-3">
-                  {d.recent.map((r) => (
+                  {d.recentConversations.map((r) => (
                     <Link
-                      key={r.title}
-                      to="/student/ai/chat"
+                      key={r.id}
+                      to={`/student/ai/chat?c=${r.id}`}
                       className="rounded-control border border-border-strong bg-surface p-3 hover:bg-surface-subtle"
                     >
                       <p className="truncate text-link text-fg-heading">{r.title}</p>

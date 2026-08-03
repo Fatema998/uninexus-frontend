@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/patterns/page-header'
 import { Button } from '@/components/ui/button'
 import { EmptyState, QueryState } from '@/components/states'
 import { useLiveClasses } from '../api'
+import { dateTime, relative } from '@/lib/format'
 
 /** LMS Live Classes — Figma 6:1780. */
 export function LiveClasses() {
@@ -24,7 +25,7 @@ export function LiveClasses() {
               ) : (
                 d.live.map((l) => (
                   <div
-                    key={l.title}
+                    key={l.id}
                     className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-success/30 bg-success/5 p-4"
                   >
                     <div>
@@ -32,9 +33,15 @@ export function LiveClasses() {
                         <span className="size-1.5 rounded-full bg-success-dot" aria-hidden />
                         {l.title}
                       </p>
-                      <p className="text-fg-muted">{l.teacher} • {l.startsIn}</p>
+                      <p className="text-fg-muted">
+                        {l.instructorName} • started {relative(l.startedAt)}
+                      </p>
                     </div>
-                    <Button size="sm">Join now</Button>
+                    <Button size="sm" asChild>
+                      <a href={l.joinUrl} target="_blank" rel="noreferrer">
+                        Join now
+                      </a>
+                    </Button>
                   </div>
                 ))
               )}
@@ -46,12 +53,14 @@ export function LiveClasses() {
             <CardBody className="flex flex-col gap-3">
               {d.upcoming.map((u) => (
                 <div
-                  key={u.title}
+                  key={u.id}
                   className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-border-strong bg-surface p-4"
                 >
                   <div>
                     <p className="text-link text-fg-heading">{u.title}</p>
-                    <p className="text-fg-muted">{u.meta}</p>
+                    <p className="text-fg-muted">
+                      {dateTime(u.startsAt)} • {u.instructorName}
+                    </p>
                   </div>
                   <Badge tone="neutral">Scheduled</Badge>
                 </div>

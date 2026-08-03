@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/patterns/page-header'
 import { ProgressBar } from '@/components/patterns/progress-bar'
 import { QueryState } from '@/components/states'
 import { useAdvisor } from '../api'
+import { gpa } from '@/lib/format'
 
 /** AI Academic Advisor — Figma 1:7728. */
 export function Advisor() {
@@ -21,8 +22,8 @@ export function Advisor() {
                 <CardHeader title="Academic Roadmap Progress" />
                 <CardBody>
                   <div className="flex flex-wrap items-baseline gap-4">
-                    <p className="text-metric text-brand-700">{d.gpa.current}</p>
-                    <p className="text-unit text-fg-muted">target {d.gpa.target}</p>
+                    <p className="text-metric text-brand-700">{gpa(d.gpa.current)}</p>
+                    <p className="text-unit text-fg-muted">target {gpa(d.gpa.target)}</p>
                   </div>
                   <ProgressBar value={d.gpa.percent} label="Progress to target GPA" className="mt-3" />
                   <p className="mt-2 text-fg-muted">{d.gpa.percent}% of target reached</p>
@@ -33,7 +34,7 @@ export function Advisor() {
                 <CardHeader title="Recommended Action Plan" />
                 <CardBody className="flex flex-col gap-4">
                   {d.plan.map((p) => (
-                    <div key={p.title} className="border-l-2 border-nav-active-student pl-3">
+                    <div key={p.id} className="border-l-2 border-nav-active-student pl-3">
                       <p className="text-link text-fg-heading">{p.title}</p>
                       <p className="text-fg-muted">{p.body}</p>
                     </div>
@@ -44,7 +45,7 @@ export function Advisor() {
 
             <aside className="flex flex-col gap-6">
               {d.alerts.map((a) => (
-                <div key={a.title} className="rounded-card border border-warning/20 bg-warning/5 p-4">
+                <div key={a.id} className="rounded-card border border-warning/20 bg-warning/5 p-4">
                   <p className="mb-1 flex items-center gap-2 text-link text-warning">
                     <AlertTriangle className="size-4" aria-hidden />
                     {a.title}

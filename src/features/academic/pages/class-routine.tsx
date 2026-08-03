@@ -1,14 +1,21 @@
 import { FileText, Wifi } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { AssistantPanel } from '@/components/patterns/assistant-panel'
+import { ConnectedAssistant } from '@/components/patterns/assistant-panel'
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { ProgressBar } from '@/components/patterns/progress-bar'
 import { QueryState } from '@/components/states'
 import { useClassRoutine } from '../api'
+import type { Weekday } from '@/types'
 import type { MetricTone } from '@/components/patterns/metric-card'
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+const DAYS: { key: Weekday; label: string }[] = [
+  { key: 'MON', label: 'Mon' },
+  { key: 'TUE', label: 'Tue' },
+  { key: 'WED', label: 'Wed' },
+  { key: 'THU', label: 'Thu' },
+  { key: 'FRI', label: 'Fri' },
+]
 
 const SLOT_TONE: Record<MetricTone, string> = {
   brand: 'border-brand-600/30 bg-brand-600/10',
@@ -37,18 +44,20 @@ export function ClassRoutine() {
                 <div className="overflow-x-auto">
                   <div className="grid min-w-[640px] grid-cols-5 gap-3">
                     {DAYS.map((day) => (
-                      <div key={day}>
-                        <p className="mb-2 text-eyebrow uppercase text-fg-muted">{day}</p>
+                      <div key={day.key}>
+                        <p className="mb-2 text-eyebrow uppercase text-fg-muted">{day.label}</p>
                         <div className="flex flex-col gap-2">
                           {d.slots
-                            .filter((s) => s.day === day)
+                            .filter((s) => s.day === day.key)
                             .map((s) => (
                               <div
-                                key={`${s.day}-${s.start}`}
+                                key={s.id}
                                 className={cn('rounded-control border p-3', SLOT_TONE[s.tone])}
                               >
-                                <p className="text-eyebrow uppercase text-fg-muted">{s.start}</p>
-                                <p className="text-link text-fg-heading">{s.title}</p>
+                                <p className="text-eyebrow uppercase text-fg-muted">
+                                  {s.startsAt}–{s.endsAt}
+                                </p>
+                                <p className="text-link text-fg-heading">{s.course.title}</p>
                                 <p className="text-fg-muted">{s.room}</p>
                               </div>
                             ))}
@@ -64,31 +73,33 @@ export function ClassRoutine() {
               <Card>
                 <CardHeader title="Daily Goal" />
                 <CardBody>
-                  <p className="text-metric text-brand-700">{d.dailyGoal}%</p>
-                  <ProgressBar value={d.dailyGoal} label="Daily study goal" className="mt-3" />
+                  <p className="text-metric text-brand-700">{d.dailyGoalPercent}%</p>
+                  <ProgressBar value={d.dailyGoalPercent} label="Daily study goal" className="mt-3" />
                 </CardBody>
               </Card>
 
               <Card>
                 <CardHeader title="Recent Files" icon={FileText} />
                 <CardBody className="flex flex-col gap-3">
-                  {d.files.map((f) => (
-                    <div key={f.name} className="flex items-center gap-3">
+                  {d.recentFiles.map((f) => (
+                    <a key={f.id} href={f.url} download className="flex items-center gap-3">
                       <FileText className="size-4.5 shrink-0 text-fg-muted" aria-hidden />
                       <div className="min-w-0">
-                        <p className="truncate text-link text-fg-heading">{f.name}</p>
-                        <p className="truncate text-fg-muted">{f.meta}</p>
+                        <p className="truncate text-link text-fg-heading">{f.filename}</p>
+                        <p className="truncate text-fg-muted">{f.note}</p>
                       </div>
-                    </div>
+                    </a>
                   ))}
-                  <p className="mt-1 flex items-center gap-2 border-t border-border pt-3 text-fg-muted">
-                    <Wifi className="size-4" aria-hidden />
-                    {d.wifi}
-                  </p>
+                  {d.campusWifiSsid && (
+                    <p className="mt-1 flex items-center gap-2 border-t border-border pt-3 text-fg-muted">
+                      <Wifi className="size-4" aria-hidden />
+                      Campus Wi-Fi: {d.campusWifiSsid}
+                    </p>
+                  )}
                 </CardBody>
               </Card>
 
-              <AssistantPanel {...d.assistant} />
+              <ConnectedAssistant context="academic.routine" />
             </aside>
           </div>
         </div>

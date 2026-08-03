@@ -530,8 +530,8 @@ GET('/api/student/attendance/daily/', ({ req, query }) =>
   json(D.dailyAttendance(query.get('date') ?? D.dayIn(0)), 200, req),
 )
 
-GET('/api/student/attendance/courses/:courseId/', ({ req, params }) =>
-  json(D.courseAttendance(params.courseId!), 200, req),
+GET('/api/student/attendance/by-course/', ({ req, query }) =>
+  json(D.courseAttendance(query.get('courseId')), 200, req),
 )
 
 // ===========================================================================
@@ -756,14 +756,16 @@ const server = Bun.serve({
 
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
 
-    // Failure injection first — a route that never runs is the point.
+    // Latency first, then the injected failure. Order matters: a failure that
+    // returned instantly would roll an optimistic patch back before anyone
+    // could see it had been applied, which defeats the point of the knob.
+    const delay = Number(url.searchParams.get('_delay') ?? BASE_LATENCY)
+    if (delay > 0) await Bun.sleep(delay)
+
     const forced = Number(url.searchParams.get('_fail'))
     if (forced >= 400) {
       return fail(forced, { detail: `Injected failure (${forced}).`, code: 'mock_failure' }, req)
     }
-
-    const delay = Number(url.searchParams.get('_delay') ?? BASE_LATENCY)
-    if (delay > 0) await Bun.sleep(delay)
 
     const hit = match(req.method, url.pathname)
     if (!hit) return notFound(req)

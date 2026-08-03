@@ -4,13 +4,16 @@ import { DataTable } from '@/components/patterns/data-table'
 import { MetricCard } from '@/components/patterns/metric-card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { QueryState } from '@/components/states'
-import { money } from '@/lib/format'
+import { date, money } from '@/lib/format'
 import { usePaymentHistory } from '../api'
+import type { PaymentStatus } from '@/types'
 
-const TONE: Record<string, BadgeTone> = {
+const TONE: Record<PaymentStatus, BadgeTone> = {
   SUCCESS: 'success',
   PENDING: 'warning',
+  REDIRECT_REQUIRED: 'info',
   FAILED: 'danger',
+  CANCELLED: 'neutral',
 }
 
 /** Payment History — Figma 1:11319. */
@@ -31,13 +34,13 @@ export function PaymentHistory() {
           <Card>
             <CardHeader title="Transactions" />
             <DataTable
-              rows={d.rows}
-              getRowKey={(r) => r.ref}
+              rows={d.results}
+              getRowKey={(r) => r.id}
               empty={{ title: 'No transactions yet' }}
               columns={[
-                { key: 'date', header: 'Date', cell: (r) => <span className="text-fg-heading">{r.date}</span> },
-                { key: 'ref', header: 'Reference', cell: (r) => r.ref },
-                { key: 'method', header: 'Method', cell: (r) => r.method },
+                { key: 'date', header: 'Date', cell: (r) => <span className="text-fg-heading">{date(r.paidAt)}</span> },
+                { key: 'ref', header: 'Reference', cell: (r) => r.reference },
+                { key: 'method', header: 'Method', cell: (r) => r.methodLabel },
                 { key: 'amount', header: 'Amount', cell: (r) => money(r.amount), className: 'text-right' },
                 { key: 'status', header: 'Status', cell: (r) => <Badge tone={TONE[r.status]}>{r.status}</Badge> },
               ]}

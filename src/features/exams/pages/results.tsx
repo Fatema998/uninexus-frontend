@@ -4,6 +4,7 @@ import { DataTable } from '@/components/patterns/data-table'
 import { MetricCard } from '@/components/patterns/metric-card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { QueryState } from '@/components/states'
+import { gpa } from '@/lib/format'
 import { useExamResults } from '../api'
 
 /** Exam Results — Figma 1:12105. */
@@ -14,7 +15,7 @@ export function ExamResults() {
     <QueryState query={query}>
       {(d) => (
         <div className="flex flex-col gap-6">
-          <PageHeader title="Exam Results" subtitle="Your published results this semester." />
+          <PageHeader title="Exam Results" subtitle={`Published results for ${d.termName}.`} />
 
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {d.metrics.map((m) => (
@@ -26,25 +27,29 @@ export function ExamResults() {
             <CardHeader title="Results" />
             <DataTable
               rows={d.rows}
-              getRowKey={(r) => r.code}
+              getRowKey={(r) => r.course.id}
               empty={{ title: 'No results published yet' }}
               columns={[
-                { key: 'code', header: 'Code', cell: (r) => r.code },
-                { key: 'name', header: 'Course', cell: (r) => <span className="text-fg-heading">{r.name}</span> },
+                { key: 'code', header: 'Code', cell: (r) => r.course.code },
+                { key: 'name', header: 'Course', cell: (r) => <span className="text-fg-heading">{r.course.title}</span> },
                 { key: 'category', header: 'Category', cell: (r) => r.category },
-                { key: 'grade', header: 'Grade', cell: (r) => <span className="text-link text-brand-700">{r.grade}</span> },
-                { key: 'points', header: 'Points', cell: (r) => r.points },
+                { key: 'grade', header: 'Grade', cell: (r) => <span className="text-link text-brand-700">{r.grade ?? '—'}</span> },
+                { key: 'points', header: 'Points', cell: (r) => (r.points === null ? '—' : gpa(r.points)) },
               ]}
             />
           </Card>
 
-          <div className="rounded-card border border-accent-600/20 bg-accent-600/5 p-4">
-            <p className="mb-1 flex items-center gap-2 text-link text-accent-600">
-              <Sparkles className="size-4" aria-hidden />
-              Predicted GPA (Final Year): {d.predictedGpa}
-            </p>
-            <p className="text-fg-body">{d.insight}</p>
-          </div>
+          {d.insight && (
+            <div className="rounded-card border border-accent-600/20 bg-accent-600/5 p-4">
+              {d.predictedGpa !== null && (
+                <p className="mb-1 flex items-center gap-2 text-link text-accent-600">
+                  <Sparkles className="size-4" aria-hidden />
+                  Predicted GPA (Final Year): {gpa(d.predictedGpa)}
+                </p>
+              )}
+              <p className="text-fg-body">{d.insight}</p>
+            </div>
+          )}
         </div>
       )}
     </QueryState>

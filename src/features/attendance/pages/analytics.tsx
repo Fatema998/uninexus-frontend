@@ -25,7 +25,7 @@ export function AttendanceAnalytics() {
           <Card>
             <CardHeader title="Day Distribution" />
             <CardBody className="flex flex-col gap-4">
-              {d.byDay.map((b) => (
+              {d.byWeekday.map((b) => (
                 <div key={b.day}>
                   <div className="mb-1.5 flex items-baseline justify-between">
                     <span className="text-link text-fg-heading">{b.day}</span>
@@ -41,13 +41,15 @@ export function AttendanceAnalytics() {
             </CardBody>
           </Card>
 
-          <div className="rounded-card border border-accent-600/20 bg-accent-600/5 p-4">
-            <p className="mb-1 flex items-center gap-2 text-link text-accent-600">
-              <Sparkles className="size-4" aria-hidden />
-              {d.forecast.headline}
-            </p>
-            <p className="text-fg-body">{d.forecast.body}</p>
-          </div>
+          {d.forecast && (
+            <div className="rounded-card border border-accent-600/20 bg-accent-600/5 p-4">
+              <p className="mb-1 flex items-center gap-2 text-link text-accent-600">
+                <Sparkles className="size-4" aria-hidden />
+                {d.forecast.headline}
+              </p>
+              <p className="text-fg-body">{d.forecast.body}</p>
+            </div>
+          )}
         </div>
       )}
     </QueryState>

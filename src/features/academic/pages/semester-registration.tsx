@@ -1,12 +1,21 @@
 import { useState } from 'react'
 import { UserRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Badge } from '@/components/patterns/badge'
+import { Badge, type BadgeTone } from '@/components/patterns/badge'
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/states'
 import { useSemesterRegistration } from '../api'
+import { date, money } from '@/lib/format'
+import type { AdvisorApprovalState } from '@/types'
+
+const APPROVAL_TONE: Record<AdvisorApprovalState, BadgeTone> = {
+  NOT_SUBMITTED: 'neutral',
+  PENDING: 'warning',
+  APPROVED: 'success',
+  REJECTED: 'danger',
+}
 
 /** Semester Registration — Figma 6:11107. */
 export function SemesterRegistration() {
@@ -17,7 +26,7 @@ export function SemesterRegistration() {
     <QueryState query={query}>
       {(d) => {
         // Default to whichever semester is actually open.
-        const active = selected ?? d.semesters.find((s) => s.state === 'OPEN')?.name ?? null
+        const active = selected ?? d.terms.find((s) => s.state === 'OPEN')?.id ?? null
 
         return (
           <div className="flex flex-col gap-6">
@@ -27,16 +36,16 @@ export function SemesterRegistration() {
               <Card>
                 <CardHeader title="Available Semesters" />
                 <CardBody className="flex flex-col gap-3">
-                  {d.semesters.map((s) => {
+                  {d.terms.map((s) => {
                     const open = s.state === 'OPEN'
-                    const isActive = active === s.name
+                    const isActive = active === s.id
 
                     return (
                       <button
-                        key={s.name}
+                        key={s.id}
                         type="button"
                         disabled={!open}
-                        onClick={() => setSelected(s.name)}
+                        onClick={() => setSelected(s.id)}
                         className={cn(
                           'flex items-center justify-between gap-3 rounded-control border p-4 text-left transition-colors',
                           isActive
@@ -47,7 +56,11 @@ export function SemesterRegistration() {
                       >
                         <div>
                           <p className="text-link text-fg-heading">{s.name}</p>
-                          <p className="text-fg-muted">{s.window}</p>
+                          <p className="text-fg-muted">
+                            {open
+                              ? `Registration open until ${date(s.closesAt)}`
+                              : `Opens ${date(s.opensAt)}`}
+                          </p>
                         </div>
                         <Badge tone={open ? 'success' : 'neutral'}>{s.state}</Badge>
                       </button>
@@ -61,21 +74,26 @@ export function SemesterRegistration() {
                   <CardHeader title="Academic Advisor" icon={UserRound} />
                   <CardBody>
                     <p className="text-link text-fg-heading">{d.advisor.name}</p>
-                    <p className="text-fg-muted">{d.advisor.dept}</p>
+                    <p className="text-fg-muted">{d.advisor.department}</p>
                   </CardBody>
                 </Card>
 
                 <Card>
                   <CardHeader title="Registration Summary" />
                   <CardBody className="flex flex-col gap-2">
-                    {d.summary.map((s) => (
-                      <div key={s.label} className="flex items-baseline justify-between gap-3">
-                        <span className="text-fg-muted">{s.label}</span>
-                        <span className="text-link text-fg-heading">{s.value}</span>
-                      </div>
-                    ))}
-                    <Button disabled={!active} className="mt-3 h-11 w-full text-body">
-                      Submit registration
+                    <Row label="Courses selected" value={String(d.selection.courseCount)} />
+                    <Row label="Total credits" value={String(d.selection.totalCredits)} />
+                    <Row label="Estimated fee" value={money(d.selection.estimatedFee)} />
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-fg-muted">Advisor approval</span>
+                      <Badge tone={APPROVAL_TONE[d.approval]}>{d.approval.replace('_', ' ')}</Badge>
+                    </div>
+
+                    <Button
+                      disabled={!active || d.selection.courseCount === 0 || d.approval === 'PENDING'}
+                      className="mt-3 h-11 w-full text-body"
+                    >
+                      {d.approval === 'PENDING' ? 'Awaiting advisor' : 'Submit registration'}
                     </Button>
                   </CardBody>
                 </Card>
@@ -85,5 +103,14 @@ export function SemesterRegistration() {
         )
       }}
     </QueryState>
+  )
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-fg-muted">{label}</span>
+      <span className="text-link text-fg-heading">{value}</span>
+    </div>
   )
 }

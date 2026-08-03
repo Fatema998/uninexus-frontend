@@ -1,11 +1,13 @@
 import { Sparkles } from 'lucide-react'
-import { AssistantPanel } from '@/components/patterns/assistant-panel'
+import { ConnectedAssistant } from '@/components/patterns/assistant-panel'
 import { Badge } from '@/components/patterns/badge'
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { MetricCard } from '@/components/patterns/metric-card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { QueryState } from '@/components/states'
+import { timeRange } from '@/lib/format'
 import { useAttendanceOverview } from '../api'
+import { MARK_TONE } from '../marks'
 
 /** Attendance Overview — Figma 1:15772. */
 export function AttendanceOverview() {
@@ -35,27 +37,29 @@ export function AttendanceOverview() {
               <CardBody className="flex flex-col gap-3">
                 {d.today.map((t) => (
                   <div
-                    key={t.title}
+                    key={t.id}
                     className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-border-strong bg-surface p-4"
                   >
                     <div>
-                      <p className="text-link text-fg-heading">{t.title}</p>
-                      <p className="text-fg-muted">{t.time}</p>
+                      <p className="text-link text-fg-heading">{t.course.title}</p>
+                      <p className="text-fg-muted">{timeRange(t.startsAt, t.endsAt)}</p>
                     </div>
-                    <Badge tone={t.state === 'PRESENT' ? 'success' : 'neutral'}>{t.state}</Badge>
+                    <Badge tone={MARK_TONE[t.mark]}>{t.mark}</Badge>
                   </div>
                 ))}
               </CardBody>
             </Card>
 
             <aside className="flex flex-col gap-6">
-              <div className="rounded-card border border-success/20 bg-success/5 p-4">
-                <p className="flex items-start gap-2 text-fg-body">
-                  <Sparkles className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
-                  {d.streak}
-                </p>
-              </div>
-              <AssistantPanel {...d.assistant} />
+              {d.streakNote && (
+                <div className="rounded-card border border-success/20 bg-success/5 p-4">
+                  <p className="flex items-start gap-2 text-fg-body">
+                    <Sparkles className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
+                    {d.streakNote}
+                  </p>
+                </div>
+              )}
+              <ConnectedAssistant context="attendance.overview" />
             </aside>
           </div>
         </div>

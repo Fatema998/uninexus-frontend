@@ -6,25 +6,62 @@ import { PageHeader } from '@/components/patterns/page-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { QueryState } from '@/components/states'
+import { ApiError } from '@/hooks/use-api'
 import { money } from '@/lib/format'
-import { useMakePayment } from '../api'
+import { useCreatePayment, usePaymentOptions } from '../api'
+import type { ApiErrorBody, PaymentMethod } from '@/types'
 
 /**
  * Make Payment — Figma 1:9415.
- * Confirmation step before anything is charged (docs/prd.md §4.5).
+ *
+ * Never optimistic (docs/api/student.md §5.3). The flow is
+ * confirm → POST intent → gateway redirect, and every state shown is one the
+ * server has actually reported.
  */
 export function MakePayment() {
-  const query = useMakePayment()
+  const query = usePaymentOptions()
+  const create = useCreatePayment()
+
   const [mode, setMode] = useState<'full' | 'custom'>('full')
   const [custom, setCustom] = useState('')
-  const [method, setMethod] = useState<string | null>(null)
+  const [method, setMethod] = useState<PaymentMethod | null>(null)
   const [confirming, setConfirming] = useState(false)
+
+  /**
+   * One key per attempt, regenerated only after a completed attempt. A retry
+   * of the same payment reuses it, so a double-click cannot double-charge.
+   */
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID())
+
+  const fieldErrors = create.error instanceof ApiError ? (create.error.body as ApiErrorBody) : null
 
   return (
     <QueryState query={query}>
       {(d) => {
-        const amount = mode === 'full' ? d.outstanding : Number(custom) || 0
-        const valid = amount > 0 && amount <= d.outstanding && method !== null
+        // Compared as numbers for the UI gate only; the server decides.
+        const outstanding = Number(d.outstanding)
+        const minimum = Number(d.minimumPayable)
+        const amount = mode === 'full' ? outstanding : Number(custom) || 0
+        const valid = amount >= minimum && amount <= outstanding && method !== null
+
+        function onConfirm() {
+          if (!method) return
+          create.mutate(
+            {
+              amount: amount.toFixed(2),
+              methodId: method.id,
+              invoiceIds: d.openInvoices.map((i) => i.id),
+              idempotencyKey,
+            },
+            {
+              onSuccess: (intent) => {
+                setIdempotencyKey(crypto.randomUUID())
+                // The gateway owns the next step. Hand off and stop.
+                if (intent.redirectUrl) window.location.assign(intent.redirectUrl)
+              },
+            },
+          )
+        }
 
         return (
           <div className="flex flex-col gap-6">
@@ -50,7 +87,7 @@ export function MakePayment() {
                     >
                       <p className="text-link text-fg-heading">Full Outstanding</p>
                       <p className="text-metric text-brand-700">{money(d.outstanding)}</p>
-                      <p className="text-fg-muted">All pending dues for {d.term}</p>
+                      <p className="text-fg-muted">All pending dues for {d.termName}</p>
                     </button>
 
                     <div
@@ -72,8 +109,9 @@ export function MakePayment() {
                         <span className="sr-only">Custom amount</span>
                         <Input
                           type="number"
-                          min={1}
-                          max={d.outstanding}
+                          min={minimum}
+                          max={outstanding}
+                          step="0.01"
                           value={custom}
                           onFocus={() => setMode('custom')}
                           onChange={(e) => setCustom(e.target.value)}
@@ -81,8 +119,15 @@ export function MakePayment() {
                           className="h-10"
                         />
                       </label>
-                      <p className="mt-1 text-fg-muted">Enter a specific amount to pay now</p>
-                      {mode === 'custom' && amount > d.outstanding && (
+                      <p className="mt-1 text-fg-muted">
+                        Minimum {money(d.minimumPayable)}, maximum {money(d.outstanding)}
+                      </p>
+                      {mode === 'custom' && amount > 0 && amount < minimum && (
+                        <p role="alert" className="mt-1 text-danger">
+                          Below the {money(d.minimumPayable)} minimum.
+                        </p>
+                      )}
+                      {mode === 'custom' && amount > outstanding && (
                         <p role="alert" className="mt-1 text-danger">
                           Cannot exceed the outstanding balance.
                         </p>
@@ -96,12 +141,13 @@ export function MakePayment() {
                   <CardBody className="grid gap-3 sm:grid-cols-3">
                     {d.methods.map((m) => (
                       <button
-                        key={m.label}
+                        key={m.id}
                         type="button"
-                        onClick={() => setMethod(m.label)}
+                        disabled={!m.enabled}
+                        onClick={() => setMethod(m)}
                         className={cn(
-                          'rounded-control border p-4 text-left transition-colors',
-                          method === m.label
+                          'rounded-control border p-4 text-left transition-colors disabled:opacity-50',
+                          method?.id === m.id
                             ? 'border-brand-600 bg-brand-600/5'
                             : 'border-border-strong bg-surface hover:bg-surface-subtle',
                         )}
@@ -124,24 +170,38 @@ export function MakePayment() {
                     </div>
                     <div className="flex items-baseline justify-between">
                       <span className="text-fg-muted">Method</span>
-                      <span className="text-link text-fg-heading">{method ?? '—'}</span>
+                      <span className="text-link text-fg-heading">{method?.label ?? '—'}</span>
                     </div>
+
+                    {create.isError && (
+                      <p role="alert" className="text-danger">
+                        {fieldErrors?.amount ?? fieldErrors?.detail ?? 'Payment could not be started.'}
+                      </p>
+                    )}
 
                     {confirming ? (
                       <div className="mt-2 rounded-control border border-warning/40 bg-warning/5 p-3">
                         <p className="text-fg-body">
-                          Confirm a payment of <strong>{money(amount)}</strong> via {method}?
+                          Confirm a payment of <strong>{money(amount)}</strong> via {method?.label}?
                         </p>
                         <div className="mt-3 flex gap-2">
-                          <Button className="flex-1" disabled>
-                            Confirm
+                          <Button
+                            className="flex-1"
+                            disabled={create.isPending}
+                            onClick={onConfirm}
+                          >
+                            {create.isPending ? 'Starting…' : 'Confirm'}
                           </Button>
-                          <Button variant="outline" onClick={() => setConfirming(false)}>
+                          <Button
+                            variant="outline"
+                            disabled={create.isPending}
+                            onClick={() => setConfirming(false)}
+                          >
                             Cancel
                           </Button>
                         </div>
                         <p className="mt-2 text-fg-muted">
-                          Gateway not connected — this is the confirmation step only.
+                          You will be redirected to the payment gateway to complete this.
                         </p>
                       </div>
                     ) : (

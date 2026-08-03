@@ -18,14 +18,20 @@ export function Recommendations() {
           <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
             <div className="flex flex-col gap-6">
               {d.primary.map((c) => (
-                <Card key={c.name}>
-                  <CardHeader title={c.name}>
-                    <Badge tone="success">{c.match}</Badge>
+                <Card key={c.id}>
+                  <CardHeader title={c.course.title}>
+                    <Badge tone="success">{c.matchPercent}% Match</Badge>
                   </CardHeader>
                   <CardBody>
-                    <p className="text-fg-muted">{c.credits} Credits</p>
-                    <p className="mt-2 text-eyebrow uppercase text-fg-muted">Why this course?</p>
-                    <p className="mt-1 text-fg-body">{c.why}</p>
+                    <p className="text-fg-muted">
+                      {c.course.code} • {c.course.credits} Credits
+                    </p>
+                    {c.why && (
+                      <>
+                        <p className="mt-2 text-eyebrow uppercase text-fg-muted">Why this course?</p>
+                        <p className="mt-1 text-fg-body">{c.why}</p>
+                      </>
+                    )}
                   </CardBody>
                 </Card>
               ))}
@@ -35,11 +41,13 @@ export function Recommendations() {
                 <CardBody className="flex flex-col gap-3">
                   {d.others.map((o) => (
                     <div
-                      key={o.name}
+                      key={o.id}
                       className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-border-strong bg-surface p-4"
                     >
-                      <p className="text-link text-fg-heading">{o.name}</p>
-                      <p className="text-fg-muted">{o.match} • {o.credits} Credits</p>
+                      <p className="text-link text-fg-heading">{o.course.title}</p>
+                      <p className="text-fg-muted">
+                        {o.matchPercent}% Match • {o.course.credits} Credits
+                      </p>
                     </div>
                   ))}
                 </CardBody>

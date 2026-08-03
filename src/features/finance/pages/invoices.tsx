@@ -1,11 +1,11 @@
-import { Sparkles } from 'lucide-react'
 import { Badge } from '@/components/patterns/badge'
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { MetricCard } from '@/components/patterns/metric-card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { Button } from '@/components/ui/button'
+import { Link } from 'react-router'
 import { QueryState } from '@/components/states'
-import { money } from '@/lib/format'
+import { date, money } from '@/lib/format'
 import { useInvoices } from '../api'
 
 /** Invoices — Figma 1:12541. */
@@ -14,17 +14,28 @@ export function Invoices() {
 
   return (
     <QueryState query={query}>
-      {(d) => (
+      {(d) => {
+        const nextDue = d.invoices.find((i) => !i.paid) ?? null
+
+        return (
         <div className="flex flex-col gap-6">
           <PageHeader
             title="Invoices"
-            subtitle={d.dueBy}
-            action={<Button className="h-11 text-body">Pay now</Button>}
+            subtitle={
+              nextDue ? `Next due ${date(nextDue.dueOn)}` : 'All invoices are settled.'
+            }
+            action={
+              nextDue ? (
+                <Button asChild className="h-11 text-body">
+                  <Link to="/student/finance/pay">Pay now</Link>
+                </Button>
+              ) : undefined
+            }
           />
 
           <div className="grid gap-6 sm:grid-cols-3">
             {d.totals.map((t) => (
-              <MetricCard key={t.label} label={t.label} value={money(t.value)} tone={t.tone} />
+              <MetricCard key={t.label} label={t.label} value={money(t.amount)} tone={t.tone} />
             ))}
           </div>
 
@@ -38,7 +49,7 @@ export function Invoices() {
                 >
                   <div className="min-w-0">
                     <p className="text-link text-fg-heading">{i.title}</p>
-                    <p className="text-fg-muted">{i.id} • {i.note}</p>
+                    <p className="text-fg-muted">{i.number} • {i.note}</p>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-link text-fg-heading">{money(i.amount)}</span>
@@ -49,15 +60,9 @@ export function Invoices() {
             </CardBody>
           </Card>
 
-          <div className="rounded-card border border-accent-600/20 bg-accent-600/5 p-4">
-            <p className="mb-1 flex items-center gap-2 text-link text-accent-600">
-              <Sparkles className="size-4" aria-hidden />
-              Predictive Financial Outlook
-            </p>
-            <p className="text-fg-body">{d.outlook}</p>
-          </div>
         </div>
-      )}
+        )
+      }}
     </QueryState>
   )
 }
