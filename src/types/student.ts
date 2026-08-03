@@ -11,55 +11,31 @@
  */
 
 import type {
+  Attachment,
+  AttendanceMark,
   BadgeTone,
+  CourseRef,
   CurrencyCode,
   Id,
   ISODate,
   ISODateTime,
+  Instructor,
+  LetterGrade,
   Metric,
   Money,
   TimeOfDay,
   Tone,
 } from './common'
 
+// Re-exported so `import type { CourseRef } from '@/types'` keeps working and
+// student screens do not need to know which file an entity lives in.
+export type { Attachment, AttendanceMark, CourseRef, Instructor, LetterGrade }
+
 // ===========================================================================
 // Shared entities
 // ===========================================================================
 
-/** Letter grade as awarded. `null` while a course is ungraded — never `"N/A"`. */
-export type LetterGrade = string | null
-
 export type EnrollmentStatus = 'ENROLLED' | 'PENDING' | 'DROPPED' | 'WAITLISTED'
-
-/** A course as the student sees it in a list. */
-export type CourseRef = {
-  id: Id
-  /** `CS-401` — registrar code, shown everywhere. */
-  code: string
-  title: string
-  credits: number
-}
-
-export type Instructor = {
-  id: Id
-  name: string
-  /** `Professor of AI & Robotics` */
-  title: string | null
-  email: string | null
-  avatarUrl: string | null
-  officeRoom: string | null
-}
-
-export type Attachment = {
-  id: Id
-  filename: string
-  /** Bytes. Format with `fileSize()`; the server does not pre-format. */
-  sizeBytes: number
-  mimeType: string
-  /** Pre-signed and short-lived. Do not cache in app state. */
-  url: string
-  uploadedAt: ISODateTime
-}
 
 // ===========================================================================
 // AI assistant panel  ·  GET /api/student/ai/assist/?context=<key>
@@ -653,8 +629,6 @@ export type GradebookResponse = {
 // ===========================================================================
 // Attendance
 // ===========================================================================
-
-export type AttendanceMark = 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED' | 'PENDING'
 
 /** GET /api/student/attendance/overview/ */
 export type AttendanceOverviewResponse = {

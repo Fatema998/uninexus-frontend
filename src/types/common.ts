@@ -139,3 +139,45 @@ export type Term = {
   endsOn: ISODate
   isCurrent: boolean
 }
+
+// ------------------------------------------------------- academic entities
+
+/**
+ * Entities every persona sees. A student reads their attendance mark, a
+ * faculty member sets it, an admin audits it — same shape, three verbs.
+ */
+
+/** A course as it appears in any list. */
+export type CourseRef = {
+  id: Id
+  /** `CS-401` — registrar code, shown everywhere. */
+  code: string
+  title: string
+  credits: number
+}
+
+export type Instructor = {
+  id: Id
+  name: string
+  /** `Professor of AI & Robotics` */
+  title: string | null
+  email: string | null
+  avatarUrl: string | null
+  officeRoom: string | null
+}
+
+/** Letter grade as awarded. `null` while ungraded — never `"N/A"`. */
+export type LetterGrade = string | null
+
+export type AttendanceMark = 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED' | 'PENDING'
+
+export type Attachment = {
+  id: Id
+  filename: string
+  /** Bytes. Format with `fileSize()`; the server does not pre-format. */
+  sizeBytes: number
+  mimeType: string
+  /** Pre-signed and short-lived. Do not cache in app state. */
+  url: string
+  uploadedAt: ISODateTime
+}

@@ -1,10 +1,11 @@
 /**
- * Dev-only mock API for the student portal.  `bun run mock`
+ * Dev-only mock API for the portal.  `bun run mock`
  *
  * Stands in for the Django backend so the frontend can be built against the
  * real fetch path — JWTs, 401 refresh, latency, failures — instead of
- * in-process fixtures. Contract lives in docs/api/student.md; payloads in
- * ./data.ts, typed against src/types.
+ * in-process fixtures. Contracts live in docs/api/student.md and
+ * docs/api/faculty.md; payloads in ./data.ts and ./faculty-data.ts, typed
+ * against src/types.
  *
  * Request knobs, on any route:
  *   ?_delay=1200   override latency in ms (default MOCK_LATENCY or 250)
@@ -35,6 +36,7 @@ import type {
   UpdateNoteRequest,
 } from '../src/types/index.ts'
 import * as D from './data.ts'
+import * as F from './faculty-data.ts'
 
 const PORT = Number(Bun.env.MOCK_PORT ?? 8787)
 const BASE_LATENCY = Number(Bun.env.MOCK_LATENCY ?? 250)
@@ -122,7 +124,10 @@ function roleFromAuth(req: Request): Role | null {
 
 // ------------------------------------------------------------ mutable state
 
-/** Everything a student mutation can touch. Reset by restarting the server. */
+/**
+ * Everything a student mutation can touch. Reset by restarting the server.
+ * Faculty state lives in ./faculty-data.ts alongside the rows it mutates.
+ */
 const state = {
   notes: [...D.NOTES] as Note[],
   revaluations: [...D.REVALUATION.requests] as RevaluationRequestRow[],
@@ -728,6 +733,225 @@ POST('/api/student/certificates/print-orders/', async ({ req }) => {
   )
 })
 
+// ===========================================================================
+// Faculty
+// ===========================================================================
+
+serve('/api/faculty/dashboard/', F.DASHBOARD)
+serve('/api/faculty/academic/', F.ACADEMIC)
+serve('/api/faculty/sections/', F.ASSIGNED_SECTIONS)
+serve('/api/faculty/exams/', F.EXAMS)
+serve('/api/faculty/research/', F.RESEARCH)
+serve('/api/faculty/research/grants/', F.GRANTS)
+serve('/api/faculty/finance/', F.FINANCE)
+
+GET('/api/faculty/sections/:id/', ({ req, params }) => {
+  const detail = F.sectionDetail(params.id!)
+  return detail ? json(detail, 200, req) : notFound(req)
+})
+
+POST('/api/faculty/sections/:id/materials/', async ({ req, params }) => {
+  const form = await req.formData()
+  const files = form.getAll('files').flatMap((f) => (typeof f === 'string' ? [] : [f]))
+  if (!files.length) return fail(400, { files: ['Attach at least one file.'] }, req)
+  void params
+  return json(
+    files.map((f) => ({
+      id: nextId('mat'),
+      filename: f.name,
+      sizeBytes: f.size,
+      mimeType: f.type || 'application/octet-stream',
+      url: `/mock/files/${encodeURIComponent(f.name)}`,
+      uploadedAt: new Date().toISOString(),
+    })),
+    201,
+    req,
+  )
+})
+
+// -------------------------------------------------------------- assignments
+
+serve('/api/faculty/assignments/', F.ASSIGNMENTS_RESPONSE)
+
+POST('/api/faculty/assignments/', async ({ req }) => {
+  const input = await body<{ sectionId?: string; title?: string; totalPoints?: number; dueAt?: string; publish?: boolean }>(req)
+  if (!input.title?.trim()) return fail(400, { title: ['This field may not be blank.'] }, req)
+  const section = F.SECTIONS.find((s) => s.id === input.sectionId)
+  if (!section) return fail(400, { sectionId: ['Unknown section.'] }, req)
+  if (!input.dueAt || Date.parse(input.dueAt) <= Date.now()) {
+    return fail(400, { dueAt: ['The due date must be in the future.'] }, req)
+  }
+  return json(
+    {
+      id: nextId('fasg'),
+      title: input.title,
+      section,
+      dueAt: input.dueAt,
+      totalPoints: input.totalPoints ?? 100,
+      submittedCount: 0,
+      gradedCount: 0,
+      enrolledCount: section.enrolledCount,
+      published: input.publish ?? false,
+    },
+    201,
+    req,
+  )
+})
+
+GET('/api/faculty/assignments/:id/submissions/', ({ req, params }) => {
+  const found = F.submissionsFor(params.id!)
+  return found ? json(found, 200, req) : notFound(req)
+})
+
+GET('/api/faculty/submissions/:id/', ({ req, params }) =>
+  json(F.submissionDetail(params.id!), 200, req),
+)
+
+route('PUT', '/api/faculty/submissions/:id/grade/', async ({ req, params }) => {
+  const input = await body<{ scores?: { criterionId: string; points: number }[]; feedback?: string; release?: boolean }>(req)
+  const scores = input.scores ?? []
+
+  // Every criterion, every time — a partial rubric would keep stale marks.
+  const missing = F.RUBRIC.filter((r) => !scores.some((s) => s.criterionId === r.id))
+  if (missing.length) {
+    return fail(400, { scores: [`Missing marks for: ${missing.map((m) => m.label).join(', ')}.`] }, req)
+  }
+  for (const s of scores) {
+    const criterion = F.RUBRIC.find((r) => r.id === s.criterionId)
+    if (!criterion) return fail(400, { scores: [`Unknown criterion ${s.criterionId}.`] }, req)
+    if (s.points < 0 || s.points > criterion.maxPoints) {
+      return fail(400, { scores: [`${criterion.label} must be between 0 and ${criterion.maxPoints}.`] }, req)
+    }
+  }
+
+  const totalScore = scores.reduce((n, s) => n + s.points, 0)
+  return json(
+    {
+      id: params.id!,
+      totalScore,
+      grade: totalScore >= 90 ? 'A' : totalScore >= 80 ? 'A-' : totalScore >= 70 ? 'B+' : 'B',
+      released: input.release ?? false,
+      gradedAt: new Date().toISOString(),
+    },
+    200,
+    req,
+  )
+})
+
+// ---------------------------------------------------------------- gradebook
+
+GET('/api/faculty/gradebook/', ({ req, query }) =>
+  json(F.gradebook(query.get('sectionId') ?? F.SECTIONS[0]!.id), 200, req),
+)
+
+PATCH('/api/faculty/gradebook/', async ({ req, query }) => {
+  const { entries } = await body<{ entries?: { studentId: string; columnId: string; points: number | null }[] }>(req)
+  if (!entries?.length) return fail(400, { entries: ['Nothing to save.'] }, req)
+
+  // Partial success: valid cells land, invalid ones come back with a reason.
+  // Rejecting the whole batch would lose thirty good edits over one typo.
+  const rejected: { studentId: string; columnId: string; reason: string }[] = []
+  let saved = 0
+
+  for (const e of entries) {
+    const column = F.COLUMNS.find((c) => c.id === e.columnId)
+    if (!column) {
+      rejected.push({ ...e, reason: 'Unknown assessment.' })
+      continue
+    }
+    if (!column.editable) {
+      rejected.push({ ...e, reason: `${column.label} is locked — results are published.` })
+      continue
+    }
+    if (e.points !== null && (e.points < 0 || e.points > column.maxPoints)) {
+      rejected.push({ ...e, reason: `Must be between 0 and ${column.maxPoints}.` })
+      continue
+    }
+    ;(F.GRADES[e.studentId] ??= {})[e.columnId] = e.points
+    saved++
+  }
+
+  void query
+  return json({ saved, rejected }, 200, req)
+})
+
+// --------------------------------------------------------------- attendance
+
+GET('/api/faculty/attendance/', ({ req, query }) =>
+  json(
+    F.attendanceSheet(query.get('sectionId') ?? F.SECTIONS[0]!.id, query.get('date') ?? D.dayIn(0)),
+    200,
+    req,
+  ),
+)
+
+route('PUT', '/api/faculty/attendance/:sessionId/', async ({ req, params }) => {
+  const { marks } = await body<{ marks?: { studentId: string; mark: string }[] }>(req)
+  if (!marks?.length) return fail(400, { marks: ['Submit the whole roster.'] }, req)
+
+  // The whole roster, every time: a partial submit cannot distinguish
+  // "unmarked" from "absent", and that difference is exam eligibility.
+  const missing = F.ROSTER.filter((s) => !marks.some((m) => m.studentId === s.id))
+  if (missing.length) {
+    return fail(400, { marks: [`Missing marks for ${missing.length} student(s).`] }, req)
+  }
+
+  const sessionId = params.sessionId!
+  F.ATTENDANCE[sessionId] = Object.fromEntries(marks.map((m) => [m.studentId, m.mark]))
+  return json(
+    {
+      sessionId,
+      presentCount: marks.filter((m) => m.mark === 'PRESENT' || m.mark === 'LATE').length,
+      totalCount: marks.length,
+      submittedAt: new Date().toISOString(),
+    },
+    200,
+    req,
+  )
+})
+
+// ------------------------------------------------------- profile · library
+
+GET('/api/faculty/profile/', ({ req }) => json(F.PROFILE, 200, req))
+
+PATCH('/api/faculty/profile/', async ({ req }) => {
+  const patch = await body<Record<string, unknown>>(req)
+  // Only self-editable fields; anything else is the registrar's to change.
+  const allowed = ['phone', 'officeRoom', 'specializations']
+  const rejected = Object.keys(patch).filter((k) => !allowed.includes(k))
+  if (rejected.length) {
+    return fail(403, { detail: `Not editable here: ${rejected.join(', ')}.`, code: 'read_only_field' }, req)
+  }
+  return json({ ...F.PROFILE, ...patch }, 200, req)
+})
+
+GET('/api/faculty/library/', ({ req, query }) => {
+  const q = (query.get('q') ?? '').toLowerCase()
+  const kind = query.get('kind')
+  const rows = F.LIBRARY.filter(
+    (i) =>
+      (!q || i.title.toLowerCase().includes(q) || i.author.toLowerCase().includes(q)) &&
+      (!kind || i.kind === kind),
+  )
+  return json(paginate(rows, query, '/api/faculty/library/'), 200, req)
+})
+
+POST('/api/faculty/library/:id/reserve/', ({ req, params }) => {
+  const item = F.LIBRARY.find((i) => i.id === params.id)
+  if (!item) return notFound(req)
+  return json(
+    {
+      id: nextId('res'),
+      itemId: item.id,
+      status: item.available ? 'RESERVED' : 'QUEUED',
+      queuePosition: item.available ? null : 2,
+      expiresAt: item.available ? new Date(Date.now() + 3 * 86_400_000).toISOString() : null,
+    },
+    201,
+    req,
+  )
+})
+
 // ---------------------------------------------------------------- pagination
 
 function paginate<T>(rows: T[], query: URLSearchParams, path: string) {
@@ -771,7 +995,11 @@ const server = Bun.serve({
     if (!hit) return notFound(req)
 
     // Auth gate, so the 401 → refresh → retry path in use-api.ts gets exercised.
-    if (url.pathname.startsWith('/api/student/') || url.pathname === '/api/me/') {
+    if (
+      url.pathname.startsWith('/api/student/') ||
+      url.pathname.startsWith('/api/faculty/') ||
+      url.pathname === '/api/me/'
+    ) {
       if (!roleFromAuth(req)) {
         return fail(401, { detail: 'Given token not valid for any token type.', code: 'token_not_valid' }, req)
       }
