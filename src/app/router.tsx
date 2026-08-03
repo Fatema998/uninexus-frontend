@@ -8,8 +8,12 @@ import { SCREENS } from './routes'
 import { SCREEN_COMPONENTS } from './screens'
 import type { Role } from '@/lib/auth'
 
-/** Screens listed in nav-config as `undesigned` have no inventory entry. */
-const UNDESIGNED: { path: string; title: string }[] = [
+/**
+ * Nav destinations with no entry in the Figma inventory. They still need a
+ * route; whether they render a real screen or a placeholder is decided by
+ * SCREEN_COMPONENTS, exactly as for inventory screens.
+ */
+const EXTRA_ROUTES: { path: string; title: string }[] = [
   { path: '/student/profile', title: 'My Profile' },
   { path: '/student/library', title: 'Library' },
   { path: '/student/services', title: 'Student Services' },
@@ -27,29 +31,36 @@ const UNDESIGNED: { path: string; title: string }[] = [
   { path: '/admin/support', title: 'Support' },
 ]
 
+/**
+ * One resolution rule for every route: render the built screen if one is
+ * registered, otherwise a placeholder naming the Figma node (when there is
+ * one). Keeping this in a single place is why adding a screen only ever means
+ * adding an entry to SCREEN_COMPONENTS.
+ */
+function routeFor(base: string, entry: { path: string; title: string; node?: string }): RouteObject {
+  const Component = SCREEN_COMPONENTS[entry.path]
+  const isIndex = entry.path === base
+
+  return {
+    // The index route carries no path; otherwise strip the shell's base prefix.
+    path: isIndex ? undefined : entry.path.slice(base.length + 1),
+    index: isIndex ? true : undefined,
+    element: Component ? (
+      <Component />
+    ) : (
+      <Placeholder title={entry.title} node={entry.node} path={entry.path} />
+    ),
+  }
+}
+
 function routesFor(role: Role): RouteObject[] {
   const base = `/${role}`
+  const mine = (p: string) => p === base || p.startsWith(`${base}/`)
 
-  const screens = SCREENS.filter((s) => s.path === base || s.path.startsWith(`${base}/`)).map(
-    (s): RouteObject => {
-      const Component = SCREEN_COMPONENTS[s.path]
-      return {
-        // '' is the index route; otherwise strip the shell's base prefix.
-        path: s.path === base ? undefined : s.path.slice(base.length + 1),
-        index: s.path === base ? true : undefined,
-        element: Component ? <Component /> : <Placeholder title={s.title} node={s.node} path={s.path} />,
-      }
-    },
-  )
-
-  const undesigned = UNDESIGNED.filter((u) => u.path.startsWith(`${base}/`)).map(
-    (u): RouteObject => ({
-      path: u.path.slice(base.length + 1),
-      element: <Placeholder title={u.title} path={u.path} />,
-    }),
-  )
-
-  return [...screens, ...undesigned]
+  return [
+    ...SCREENS.filter((s) => mine(s.path)),
+    ...EXTRA_ROUTES.filter((e) => mine(e.path)),
+  ].map((entry) => routeFor(base, entry))
 }
 
 const router = createBrowserRouter([

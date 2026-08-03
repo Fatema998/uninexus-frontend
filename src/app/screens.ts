@@ -112,4 +112,9 @@ export const SCREEN_COMPONENTS: Record<string, ComponentType> = {
 
   // ------------------------------------------------------- certificates
   '/student/certificates': page(() => import('@/features/certificates/page'), 'Certificates'),
+
+  // ------------------------------- admin operations (no Figma frames yet)
+  '/admin/health': page(() => import('@/features/admin/pages/system-health'), 'SystemHealth'),
+  '/admin/settings': page(() => import('@/features/admin/pages/settings'), 'AdminSettings'),
+  '/admin/support': page(() => import('@/features/admin/pages/support'), 'AdminSupport'),
 }
