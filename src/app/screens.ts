@@ -83,4 +83,33 @@ export const SCREEN_COMPONENTS: Record<string, ComponentType> = {
   '/student/ai/assignment-helper': page(() => import('@/features/ai/pages/assignment-helper'), 'AssignmentHelper'),
   '/student/ai/advisor': page(() => import('@/features/ai/pages/advisor'), 'Advisor'),
   '/student/ai/recommendations': page(() => import('@/features/ai/pages/recommendations'), 'Recommendations'),
+
+  // ------------------------------------------------- Phase 5 — faculty
+  '/faculty/profile': page(() => import('@/features/faculty/pages/profile'), 'FacultyProfile'),
+  '/faculty/academic': page(() => import('@/features/faculty/pages/academic'), 'FacultyAcademic'),
+  '/faculty/courses': page(() => import('@/features/faculty/pages/courses-management'), 'CoursesManagement'),
+  '/faculty/courses/assigned': page(() => import('@/features/faculty/pages/assigned-courses'), 'AssignedCourses'),
+  '/faculty/assignments': page(() => import('@/features/faculty/pages/assignments-overview'), 'AssignmentsOverview'),
+  '/faculty/assignments/:id/review': page(() => import('@/features/faculty/pages/assignment-review'), 'AssignmentReview'),
+  '/faculty/gradebook': page(() => import('@/features/faculty/pages/gradebook'), 'FacultyGradebook'),
+  '/faculty/attendance': page(() => import('@/features/faculty/pages/attendance-management'), 'AttendanceManagement'),
+  '/faculty/exams': page(() => import('@/features/faculty/pages/exams'), 'FacultyExams'),
+  '/faculty/library': page(() => import('@/features/faculty/pages/library'), 'FacultyLibrary'),
+  '/faculty/research': page(() => import('@/features/faculty/pages/research-portfolio'), 'ResearchPortfolio'),
+  '/faculty/research/grants': page(() => import('@/features/faculty/pages/grants'), 'Grants'),
+  '/faculty/finance': page(() => import('@/features/faculty/pages/finance'), 'FacultyFinance'),
+
+  // --------------------------------------------------- Phase 6 — admin
+  '/admin/users': page(() => import('@/features/admin/pages/user-management'), 'UserManagement'),
+  '/admin/users/:id': page(() => import('@/features/admin/pages/security-profile'), 'SecurityProfile'),
+  '/admin/admissions': page(() => import('@/features/admin/pages/admissions'), 'Admissions'),
+  '/admin/admissions/:id': page(() => import('@/features/admin/pages/application-review'), 'ApplicationReview'),
+  '/admin/academic': page(() => import('@/features/admin/pages/academic-management'), 'AcademicManagement'),
+  '/admin/finance': page(() => import('@/features/admin/pages/finance-control'), 'FinanceControl'),
+  '/admin/exams': page(() => import('@/features/admin/pages/exam-hub'), 'ExamHub'),
+  '/admin/exams/schedule': page(() => import('@/features/admin/pages/exam-scheduling'), 'ExamScheduling'),
+  '/admin/exams/marks': page(() => import('@/features/admin/pages/marks-entry'), 'MarksEntry'),
+
+  // ------------------------------------------------------- certificates
+  '/student/certificates': page(() => import('@/features/certificates/page'), 'Certificates'),
 }
