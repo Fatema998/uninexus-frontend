@@ -44,7 +44,7 @@ Nine of them, in [prd.md §6](prd.md#6-open-questions) — backend, auth, curren
 
 ## Current state
 
-**Phases 0–3 are done.** Token layer, pattern components, the three role shells, all 83 routes, JWT auth, and the three dashboards are built and verified. Phases 4–6 (the 80 remaining screens) are next — start at [build-plan.md](build-plan.md) 4.1.
+**Phases 0–6 are done — all 82 screens are built, with no placeholders left.** Token layer, shadcn primitives, pattern components, the three role shells, JWT auth, and every screen across Student, Faculty, and Admin are in place and verified. [Phase 7 (hardening)](build-plan.md) is what remains: real API wiring, accessibility pass, and auth for production.
 
 ```bash
 bun install && bun run dev
@@ -52,4 +52,4 @@ bun install && bun run dev
 
 Sign in as `student`, `faculty`, or `admin` with any password. While `VITE_API_URL` is unset, a dev-only seam (`src/lib/dev-auth.ts`) mints a local token so the UI runs without the Django backend. Set `VITE_API_URL` and the seam disables itself.
 
-Every unbuilt screen already has a route and renders a placeholder that deep-links to its Figma node — so picking up any screen needs no doc lookup.
+Every screen is lazy-loaded into its own chunk and driven by fixtures through hooks shaped like `use-api`, so swapping a module to the real Django API is a one-line change in its `api.ts`.

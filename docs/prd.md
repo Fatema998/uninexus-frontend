@@ -16,7 +16,7 @@ A single web application serving three roles against one university dataset:
 | **Faculty** | 1,248 faculty | Light sidebar |
 | **Institutional Admin** | 24 departments, 642 courses, ৳128.75M revenue | Dark sidebar |
 
-Currency is **BDT (৳)** on admin screens and **$** on student screens. ⚠️ This is a genuine conflict in the design, not a locale feature — see §6.
+Currency is **BDT (৳)** throughout — confirmed across every finance frame and implemented in `src/lib/format.ts`.
 
 The distinguishing feature is that AI is not a bolted-on chat widget. It has eight dedicated student screens, appears as a persistent right-rail assistant on the student dashboard, and surfaces as "UniGPT Insight" advisory cards inside faculty workflows.
 
@@ -123,7 +123,7 @@ Written against what the designs actually show. Each maps to screens in the inve
 
 1. **Backend.** No API exists. `src/hooks/use-api.ts` expects a REST base at `VITE_API_URL`. Is there a backend, or does the frontend build against mocks? **Blocks Phase 2.** Default assumption: build against typed mock fixtures behind the existing hooks, so the swap is one env var.
 2. **Auth.** No login, signup, forgot-password, or 2FA screens are designed, but the admin has a "Security Profile". What is the auth provider? **Blocks Phase 1.**
-3. **Currency.** Admin shows ৳ (BDT), student shows $. Which is real? If both, an actual i18n/currency layer is needed rather than hardcoded glyphs.
+3. **Currency — RESOLVED (2026-08-03).** Every finance frame in Figma shows the taka sign, so the app standardises on BDT via `src/lib/format.ts`. Original question: Admin shows ৳ (BDT), student shows $. Which is real? If both, an actual i18n/currency layer is needed rather than hardcoded glyphs.
 4. **Undesigned student modules.** My Profile, Library, Student Services, Clubs, Transport, Hostel, Digital ID are in the sidebar with no frames. Build as placeholders, hide from nav, or design first?
 5. **Undesigned admin modules.** System Health, Settings, Support — same question.
 6. **Empty / loading / error / zero states.** Not designed anywhere. Proposal: one shared set built in Phase 1 from existing tokens, applied everywhere.
