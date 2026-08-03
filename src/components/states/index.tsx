@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode } from 'react'
 import { AlertCircle, Inbox, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError } from '@/hooks/use-api'
 
 /**
@@ -24,8 +25,8 @@ export function LoadingState({ label = 'Loading…', className }: { label?: stri
 /** Skeleton block for card-shaped content — steadier than a spinner in a grid. */
 export function LoadingCard({ className }: { className?: string }) {
   return (
-    <div
-      className={cn('h-32 animate-pulse rounded-card border border-border-strong bg-surface', className)}
+    <Skeleton
+      className={cn('h-32 rounded-card border border-border-strong bg-surface', className)}
       role="status"
       aria-label="Loading"
     />

@@ -6,6 +6,9 @@ import { useAuth } from '@/features/auth/auth-context'
 import { homeFor, type Role } from '@/lib/auth'
 import { BRAND_ICON, BRAND_SUBTITLE, NAV, SUB_NAV } from './nav-config'
 import { NavItem } from './nav-item'
+import { Input } from '@/components/ui/input'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Separator } from '@/components/ui/separator'
 
 /**
  * One shell, driven by role. The three personas differ only in the sidebar
@@ -43,10 +46,10 @@ export function AppShell({ role }: { role: Role }) {
           <label className="relative hidden max-w-[320px] flex-1 items-center sm:flex">
             <Search className="pointer-events-none absolute left-3 size-4.5 text-fg-muted" aria-hidden />
             <span className="sr-only">Search</span>
-            <input
+            <Input
               type="search"
               placeholder="Search anything (Ctrl+K)"
-              className="h-10 w-full rounded-control border border-border-strong bg-surface pl-10 pr-3 outline-none focus-visible:border-brand-600"
+              className="h-10 pl-10"
             />
           </label>
 
@@ -72,7 +75,7 @@ export function AppShell({ role }: { role: Role }) {
                 <p className="text-link text-fg-heading">{user.name}</p>
                 {user.subtitle && <p className="text-eyebrow uppercase text-fg-muted">{user.subtitle}</p>}
               </div>
-              <Avatar user={user} />
+              <UserAvatar user={user} />
               <button
                 type="button"
                 onClick={logout}
@@ -115,7 +118,7 @@ export function AppShell({ role }: { role: Role }) {
   )
 }
 
-function Avatar({ user }: { user: { name: string; avatar?: string } }) {
+function UserAvatar({ user }: { user: { name: string; avatar?: string } }) {
   const initials = user.name
     .split(' ')
     .slice(0, 2)
@@ -123,12 +126,13 @@ function Avatar({ user }: { user: { name: string; avatar?: string } }) {
     .join('')
     .toUpperCase()
 
-  return user.avatar ? (
-    <img src={user.avatar} alt="" className="size-10 rounded-full object-cover" />
-  ) : (
-    <span className="grid size-10 shrink-0 place-items-center rounded-full bg-nav-active-student text-link text-brand-700">
-      {initials}
-    </span>
+  return (
+    <Avatar className="size-10 shrink-0">
+      <AvatarImage src={user.avatar} alt="" />
+      <AvatarFallback className="bg-nav-active-student text-link text-brand-700">
+        {initials}
+      </AvatarFallback>
+    </Avatar>
   )
 }
 
@@ -188,7 +192,12 @@ function Sidebar({ role, open, onClose }: { role: Role; open: boolean; onClose: 
         <nav aria-label="Main" onClick={onClose} className="flex flex-1 flex-col gap-1 p-4">
           {NAV[role].map((entry, i) => {
             if (entry.kind === 'divider') {
-              return <hr key={`d${i}`} className={cn('my-1 border-0 border-t', dark ? 'border-white/10' : 'border-border')} />
+              return (
+                <Separator
+                  key={`d${i}`}
+                  className={cn('my-1', dark ? 'bg-white/10' : 'bg-border')}
+                />
+              )
             }
             if (entry.kind === 'spacer') return <div key={`s${i}`} className="flex-1" />
             return <NavItem key={entry.to} entry={entry} role={role} />
@@ -203,7 +212,7 @@ function Sidebar({ role, open, onClose }: { role: Role; open: boolean; onClose: 
                 dark ? 'border-white/10 bg-white/5' : 'border-border-strong bg-surface',
               )}
             >
-              <Avatar user={user} />
+              <UserAvatar user={user} />
               <div className="min-w-0">
                 <p className={cn('truncate text-link', dark ? 'text-fg-on-dark-strong' : 'text-fg-heading')}>
                   {user.name}

@@ -5,6 +5,8 @@ import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { EmptyState, QueryState } from '@/components/states'
 import { useFacultyDirectory } from '../api'
+import { Input } from '@/components/ui/input'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 
 const initials = (name: string) =>
   name
@@ -44,11 +46,11 @@ export function FacultyDirectory() {
                   <label className="relative flex items-center">
                     <Search className="pointer-events-none absolute left-3 size-4.5 text-fg-muted" aria-hidden />
                     <span className="sr-only">Search faculty</span>
-                    <input
+                    <Input
                       value={q}
                       onChange={(e) => setQ(e.target.value)}
                       placeholder="Search by name, course, or room…"
-                      className="h-10 w-full rounded-control border border-border-strong bg-surface pl-10 pr-3 outline-none focus-visible:border-brand-600"
+                      className="h-10 pl-10"
                     />
                   </label>
 
@@ -64,9 +66,11 @@ export function FacultyDirectory() {
                           key={f.email}
                           className="flex gap-3 rounded-control border border-border-strong bg-surface p-4"
                         >
-                          <span className="grid size-12 shrink-0 place-items-center rounded-full bg-nav-active-student text-link text-brand-700">
-                            {initials(f.name)}
-                          </span>
+                          <Avatar className="size-12 shrink-0">
+                            <AvatarFallback className="bg-nav-active-student text-link text-brand-700">
+                              {initials(f.name)}
+                            </AvatarFallback>
+                          </Avatar>
                           <div className="min-w-0">
                             <p className="truncate text-link text-fg-heading">{f.name}</p>
                             <p className="truncate text-fg-muted">{f.title}</p>

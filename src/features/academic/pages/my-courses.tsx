@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/patterns/page-header'
 import { ProgressBar } from '@/components/patterns/progress-bar'
 import { EmptyState, QueryState } from '@/components/states'
 import { useMyCourses } from '../api'
+import { Input } from '@/components/ui/input'
 
 /** My Courses — Figma 6:11399. */
 export function MyCourses() {
@@ -41,11 +42,11 @@ export function MyCourses() {
                   <label className="relative flex items-center">
                     <Search className="pointer-events-none absolute left-3 size-4.5 text-fg-muted" aria-hidden />
                     <span className="sr-only">Filter courses</span>
-                    <input
+                    <Input
                       value={filter}
                       onChange={(e) => setFilter(e.target.value)}
                       placeholder="Filter by code or name"
-                      className="h-10 w-full rounded-control border border-border-strong bg-surface pl-10 pr-3 outline-none focus-visible:border-brand-600"
+                      className="h-10 pl-10"
                     />
                   </label>
 
