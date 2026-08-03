@@ -6,6 +6,8 @@ import {
   type UseQueryOptions,
 } from '@tanstack/react-query'
 
+import { clearTokens, getAccessToken, getRefreshToken, setTokens } from '@/lib/auth'
+
 const BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
 export class ApiError extends Error {
@@ -20,15 +22,70 @@ export class ApiError extends Error {
   }
 }
 
-/** Thin fetch wrapper: JSON in, JSON out, throws ApiError on non-2xx. */
-export async function apiFetch<T>(endpoint: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${endpoint}`, {
+/** Broadcast when the session is unrecoverable, so AuthProvider can drop the user. */
+export const AUTH_EXPIRED_EVENT = 'unigpt:auth-expired'
+
+/**
+ * Exchange the refresh token for a new access token.
+ * Deduped: concurrent 401s share one in-flight refresh rather than racing.
+ */
+let refreshInFlight: Promise<string | null> | null = null
+
+function refreshAccessToken(): Promise<string | null> {
+  refreshInFlight ??= (async () => {
+    const refresh = getRefreshToken()
+    if (!refresh) return null
+    try {
+      const res = await fetch(`${BASE_URL}/api/token/refresh/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh }),
+      })
+      if (!res.ok) return null
+      const { access } = (await res.json()) as { access?: string }
+      if (!access) return null
+      setTokens(access)
+      return access
+    } catch {
+      return null
+    } finally {
+      // Cleared on the next tick so callers awaiting this promise still share it.
+      queueMicrotask(() => {
+        refreshInFlight = null
+      })
+    }
+  })()
+  return refreshInFlight
+}
+
+function buildInit(init: RequestInit | undefined, token: string | null): RequestInit {
+  return {
     ...init,
     headers: {
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
-  })
+  }
+}
+
+/**
+ * Thin fetch wrapper: JSON in, JSON out, throws ApiError on non-2xx.
+ * Attaches the JWT and retries once through a token refresh on 401.
+ */
+export async function apiFetch<T>(endpoint: string, init?: RequestInit): Promise<T> {
+  const url = `${BASE_URL}${endpoint}`
+  let res = await fetch(url, buildInit(init, getAccessToken()))
+
+  if (res.status === 401 && getRefreshToken()) {
+    const access = await refreshAccessToken()
+    if (access) {
+      res = await fetch(url, buildInit(init, access))
+    } else {
+      clearTokens()
+      window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT))
+    }
+  }
 
   // 204 and friends have no body to parse.
   const body = res.status === 204 ? null : await res.json().catch(() => null)

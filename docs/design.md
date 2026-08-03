@@ -56,8 +56,9 @@ Status colour carries meaning. Never pick a status colour for decoration.
 | `--fg-on-dark` | `#d3e4fe` | Inactive nav label on the dark admin shell |
 | `--fg-on-dark-strong` | `#fffbff` | Active nav label on the dark admin shell |
 | `--bg-app` | `#f8f9ff` | Page background — identical across all three personas |
-| `--bg-sidebar` | `#eff4ff` | Student + Faculty sidebar |
+| `--bg-sidebar` | `#eff4ff` | Faculty sidebar |
 | `--bg-sidebar-dark` | `#213145` | Admin/ERP sidebar |
+| `--nav-active-student` | `#d3e4fe` | Student active nav fill |
 | `--surface` | `rgba(255,255,255,.7)` | Card fill (translucent — see §1.5) |
 | `--surface-subtle` | `rgba(239,244,255,.5)` | Card header strip, table header row |
 | `--border` | `rgba(195,198,215,.3)` | Default divider / card header underline |
@@ -69,15 +70,23 @@ Status colour carries meaning. Never pick a status colour for decoration.
 
 #### Persona shells
 
-The three personas share **one** token set and differ only in the sidebar shell:
+The three personas share **one** token set and differ only in the sidebar shell. All three treatments are genuinely distinct — measured from `6:7179` (student), `1:2` (faculty), and `7:15548` (admin):
 
-| Persona | Sidebar | Active item | Active label |
-|---|---|---|---|
-| Student | `--bg-sidebar` | `--brand-gradient` + `drop-shadow(0 4px 6px rgba(37,99,235,.25))`, `radius 8` | `#fff` |
-| Faculty | `--bg-sidebar` | same as Student | `#fff` |
-| Admin/ERP | `--bg-sidebar-dark` | flat `--accent-500`, `radius 12` | `--fg-on-dark-strong` |
+| Persona | Sidebar fill | Width | Active item | Active label |
+|---|---|---|---|---|
+| Student | `--bg-app` + `1px` right border `#c3c6d7` | `256` | flat `--nav-active-student`, `radius 12`, `drop-shadow(0 1px 1px rgba(0,0,0,.05))` | `--brand-700` |
+| Faculty | `--bg-sidebar` | `260` | `--brand-gradient` + `drop-shadow(0 4px 6px rgba(37,99,235,.25))`, `radius 8` | `#fff` |
+| Admin/ERP | `--bg-sidebar-dark` | `260` | flat `--accent-500`, `radius 12` | `--fg-on-dark-strong` |
+
+> **Corrected 2026-08-03.** An earlier revision of this file gave Student the Faculty treatment. The dedicated `UniGPT Student Sidebar Panel` frame (`6:7179`) is authoritative for Student and shows a flat `#d3e4fe` fill at radius 12 on a `#f8f9ff` sidebar — not the blue gradient. Build from this table.
 
 This is the **only** sanctioned persona divergence. Content-area cards, type, spacing, and status colours are identical everywhere.
+
+#### Student nav (`6:7179`) — 18 items
+
+Dashboard · My Profile · Academic · Learning (LMS) · Attendance · Examination · Finance · Library · Student Services · Clubs · Transport · Hostel — divider — **AI Assistant** (`rgba(113,42,226,.05)` overlay, semibold, `--fg-heading`) · Certificates · Digital ID · Career · Communication — spacer — Settings.
+
+Six of these (Library, Student Services, Clubs, Transport, Hostel, Career, Communication, Digital ID) have **no designed screens**. See [Open questions](#6-open-questions).
 
 ---
 
