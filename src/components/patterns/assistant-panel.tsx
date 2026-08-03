@@ -2,6 +2,8 @@ import { Send, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardBody, CardHeader } from './card'
 import { Input } from '@/components/ui/input'
+import { useGetData } from '@/hooks/use-api'
+import type { AssistantResponse } from '@/types'
 
 /**
  * AIAssistantPanel — design.md §3.
@@ -68,5 +70,30 @@ export function AssistantPanel({ messages, suggestions = [], title = 'Academic A
         </div>
       </CardBody>
     </Card>
+  )
+}
+
+/**
+ * The panel, fetched by screen context.
+ *
+ * Its own request, not part of the screen payload: the copy is model-generated
+ * and slow, so blocking a dashboard on it would trade a 200ms page for a 3s
+ * one. `retry: false` and rendering nothing on failure are deliberate — a dead
+ * model degrades the rail, never the page. See docs/api/student.md §2.2.
+ */
+export function ConnectedAssistant({ context }: { context: string }) {
+  const { data } = useGetData<AssistantResponse>(
+    `/api/student/ai/assist/?context=${encodeURIComponent(context)}`,
+    ['ai', 'assist', context],
+    { staleTime: 5 * 60_000, retry: false },
+  )
+
+  if (!data) return null
+  return (
+    <AssistantPanel
+      title={data.title ?? undefined}
+      messages={data.messages}
+      suggestions={data.suggestions}
+    />
   )
 }

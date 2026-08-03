@@ -33,4 +33,6 @@ const ICONS: Record<string, LucideIcon> = {
   Wallet,
 }
 
-export const iconFor = (name: string): LucideIcon => ICONS[name] ?? ClipboardList
+/** `icon` is optional on the wire, so undefined falls back like an unknown name. */
+export const iconFor = (name: string | undefined): LucideIcon =>
+  (name ? ICONS[name] : undefined) ?? ClipboardList
