@@ -7,6 +7,7 @@ import { ApiError } from '@/hooks/use-api'
 import { homeFor } from '@/lib/auth'
 import { DEV_USERS, devAuthEnabled } from '@/lib/dev-auth'
 import { useAuth } from './auth-context'
+import { Input } from '@/components/ui/input'
 
 /**
  * Deliberately plain — no Figma frame exists for auth yet. Uses only tokens
@@ -76,7 +77,7 @@ export function LoginPage() {
           <label className="mb-1.5 block text-link text-fg-heading" htmlFor="username">
             Username
           </label>
-          <input
+          <Input
             id="username"
             name="username"
             autoComplete="username"
@@ -88,7 +89,7 @@ export function LoginPage() {
           <label className="mb-1.5 block text-link text-fg-heading" htmlFor="password">
             Password
           </label>
-          <input
+          <Input
             id="password"
             name="password"
             type="password"

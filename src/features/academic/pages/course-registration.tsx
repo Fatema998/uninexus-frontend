@@ -7,6 +7,15 @@ import { PageHeader } from '@/components/patterns/page-header'
 import { Button } from '@/components/ui/button'
 import { EmptyState, QueryState } from '@/components/states'
 import { useCourseRegistration, type OfferedCourse } from '../api'
+import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const NOTE_TONE: Record<OfferedCourse['noteTone'], BadgeTone> = {
   neutral: 'neutral',
@@ -57,26 +66,26 @@ export function CourseRegistration() {
                     <label className="relative flex flex-1 items-center">
                       <Search className="pointer-events-none absolute left-3 size-4.5 text-fg-muted" aria-hidden />
                       <span className="sr-only">Search courses</span>
-                      <input
+                      <Input
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
                         placeholder="Search by course code or title (e.g., CS301)…"
-                        className="h-10 w-full rounded-control border border-border-strong bg-surface pl-10 pr-3 outline-none focus-visible:border-brand-600"
+                        className="h-10 pl-10"
                       />
                     </label>
 
-                    <label>
-                      <span className="sr-only">Filter by department</span>
-                      <select
-                        value={dept}
-                        onChange={(e) => setDept(e.target.value)}
-                        className="h-10 rounded-control border border-border-strong bg-surface px-3 outline-none focus-visible:border-brand-600"
-                      >
+                    <Select value={dept} onValueChange={setDept}>
+                      <SelectTrigger className="h-10 w-[200px]" aria-label="Filter by department">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
                         {d.departments.map((x) => (
-                          <option key={x}>{x}</option>
+                          <SelectItem key={x} value={x}>
+                            {x}
+                          </SelectItem>
                         ))}
-                      </select>
-                    </label>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {shown.length === 0 ? (
@@ -97,11 +106,10 @@ export function CourseRegistration() {
                               : 'border-border-strong bg-surface hover:bg-surface-subtle',
                           )}
                         >
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={isPicked}
-                            onChange={() => toggle(c.code)}
-                            className="mt-1 size-4 accent-brand-700"
+                            onCheckedChange={() => toggle(c.code)}
+                            className="mt-1"
                           />
                           <div className="min-w-0 flex-1">
                             <p className="text-link text-fg-heading">{c.name}</p>

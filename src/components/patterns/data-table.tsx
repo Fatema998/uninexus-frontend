@@ -1,9 +1,18 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { EmptyState } from '@/components/states'
 
 /**
- * DataTable — design.md §3.
+ * DataTable — design.md §3, built on the shadcn <Table> primitives.
+ *
  * Deliberately not a data-grid: sorting/filtering/pagination arrive when a
  * screen needs them, not before.
  */
@@ -34,32 +43,31 @@ export function DataTable<T>({
 
   return (
     <div className={cn('w-full overflow-x-auto', className)}>
-      <table className="w-full border-collapse text-left">
-        <thead>
-          <tr className="bg-surface-subtle">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-surface-subtle hover:bg-surface-subtle">
             {columns.map((c) => (
-              <th
+              <TableHead
                 key={c.key}
-                scope="col"
-                className={cn('px-6 py-3 text-eyebrow uppercase text-fg-muted', c.className)}
+                className={cn('h-auto px-6 py-3 text-eyebrow uppercase text-fg-muted', c.className)}
               >
                 {c.header}
-              </th>
+              </TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((row, i) => (
-            <tr key={getRowKey(row, i)} className="border-b border-border last:border-0">
+            <TableRow key={getRowKey(row, i)} className="border-border">
               {columns.map((c) => (
-                <td key={c.key} className={cn('px-6 py-4 text-fg-body', c.className)}>
+                <TableCell key={c.key} className={cn('px-6 py-4 text-body text-fg-body', c.className)}>
                   {c.cell(row)}
-                </td>
+                </TableCell>
               ))}
-            </tr>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   )
 }

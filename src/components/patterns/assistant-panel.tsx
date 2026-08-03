@@ -1,6 +1,7 @@
 import { Send, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardBody, CardHeader } from './card'
+import { Input } from '@/components/ui/input'
 
 /**
  * AIAssistantPanel — design.md §3.
@@ -56,9 +57,9 @@ export function AssistantPanel({ messages, suggestions = [], title = 'Academic A
         <div className="mt-2 flex gap-2">
           <label className="flex-1">
             <span className="sr-only">Ask the assistant</span>
-            <input
+            <Input
               placeholder="Ask anything…"
-              className="h-10 w-full rounded-control border border-border-strong bg-surface px-3 outline-none focus-visible:border-brand-600"
+              className="h-10"
             />
           </label>
           <Button size="icon-lg" aria-label="Send">

@@ -1,17 +1,21 @@
 import { cn } from '@/lib/utils'
+import { Progress } from '@/components/ui/progress'
 import type { MetricTone } from './metric-card'
 
 /**
  * ProgressBar — design.md §3. Height 6, pill, track `--track`.
  * Fill is the metric's own colour, never brand-blue by default.
+ *
+ * Wraps shadcn <Progress> (Radix) so it keeps the correct ARIA semantics;
+ * the tone/track styling is UniGPT's.
  */
 const FILL: Record<MetricTone, string> = {
-  brand: 'bg-brand-700',
-  accent: 'bg-accent-600',
-  info: 'bg-info',
-  success: 'bg-success',
-  warning: 'bg-warning',
-  danger: 'bg-danger',
+  brand: '[&_[data-slot=progress-indicator]]:bg-brand-700',
+  accent: '[&_[data-slot=progress-indicator]]:bg-accent-600',
+  info: '[&_[data-slot=progress-indicator]]:bg-info',
+  success: '[&_[data-slot=progress-indicator]]:bg-success',
+  warning: '[&_[data-slot=progress-indicator]]:bg-warning',
+  danger: '[&_[data-slot=progress-indicator]]:bg-danger',
 }
 
 export function ProgressBar({
@@ -29,15 +33,10 @@ export function ProgressBar({
   const pct = Math.min(100, Math.max(0, value))
 
   return (
-    <div
-      className={cn('h-1.5 w-full overflow-hidden rounded-full bg-track', className)}
-      role="progressbar"
-      aria-valuenow={Math.round(pct)}
-      aria-valuemin={0}
-      aria-valuemax={100}
+    <Progress
+      value={pct}
       aria-label={label}
-    >
-      <div className={cn('h-full rounded-full transition-[width]', FILL[tone])} style={{ width: `${pct}%` }} />
-    </div>
+      className={cn('h-1.5 bg-track', FILL[tone], className)}
+    />
   )
 }
