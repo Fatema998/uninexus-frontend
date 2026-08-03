@@ -1,8 +1,10 @@
+import { cn } from '@/lib/utils'
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { MetricCard } from '@/components/patterns/metric-card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { QueryState } from '@/components/states'
 import { useExamHub } from '../api'
+import { relative, time } from '@/lib/format'
 
 /** ERP Examination Management Hub — Figma 7:17176. */
 export function ExamHub() {
@@ -26,11 +28,13 @@ export function ExamHub() {
               <CardBody className="flex flex-col gap-3">
                 {d.ongoing.map((o) => (
                   <div
-                    key={o.title}
+                    key={o.id}
                     className="flex items-center justify-between gap-3 rounded-control border border-border-strong bg-surface p-4"
                   >
                     <p className="text-link text-fg-heading">{o.title}</p>
-                    <p className="text-fg-muted">{o.place}</p>
+                    <p className="text-fg-muted">
+                      {o.venue} • {time(o.startsAt)}
+                    </p>
                   </div>
                 ))}
               </CardBody>
@@ -40,11 +44,17 @@ export function ExamHub() {
               <CardHeader title="Activity Log" />
               <CardBody className="flex flex-col gap-3">
                 {d.log.map((l) => (
-                  <div key={l.text} className="flex gap-3">
-                    <span className="mt-2 size-1.5 shrink-0 rounded-full bg-brand-600" aria-hidden />
+                  <div key={l.id} className="flex gap-3">
+                    <span
+                      className={cn(
+                        'mt-2 size-1.5 shrink-0 rounded-full',
+                        l.tone === 'danger' ? 'bg-danger' : l.tone === 'success' ? 'bg-success' : 'bg-brand-600',
+                      )}
+                      aria-hidden
+                    />
                     <div>
                       <p className="text-fg-body">{l.text}</p>
-                      <p className="text-fg-muted">{l.when}</p>
+                      <p className="text-fg-muted">{relative(l.at)}</p>
                     </div>
                   </div>
                 ))}

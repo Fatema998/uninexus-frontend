@@ -4,6 +4,7 @@ import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { DataTable } from '@/components/patterns/data-table'
 import { PageHeader } from '@/components/patterns/page-header'
 import { QueryState } from '@/components/states'
+import { relative } from '@/lib/format'
 import { useSupport } from '../api-ops'
 
 const TONE: Record<string, BadgeTone> = {
@@ -44,10 +45,10 @@ export function AdminSupport() {
               getRowKey={(r) => r.id}
               empty={{ title: 'No tickets', description: 'Nothing needs attention right now.' }}
               columns={[
-                { key: 'id', header: 'Ticket', cell: (r) => r.id },
+                { key: 'id', header: 'Ticket', cell: (r) => r.reference },
                 { key: 'subject', header: 'Subject', cell: (r) => <span className="text-fg-heading">{r.subject}</span> },
-                { key: 'from', header: 'Raised by', cell: (r) => r.from },
-                { key: 'when', header: 'Updated', cell: (r) => r.when },
+                { key: 'from', header: 'Raised by', cell: (r) => r.fromName },
+                { key: 'when', header: 'Updated', cell: (r) => relative(r.updatedAt) },
                 { key: 'status', header: 'Status', cell: (r) => <Badge tone={TONE[r.status]}>{r.status}</Badge> },
               ]}
             />
@@ -57,13 +58,13 @@ export function AdminSupport() {
             <CardHeader title="Common Tasks" />
             <CardBody className="grid gap-3 sm:grid-cols-2">
               {d.topics.map((t) => (
-                <button
-                  key={t}
-                  type="button"
+                <a
+                  key={t.id}
+                  href={t.url}
                   className="rounded-control border border-border-strong bg-surface p-4 text-left text-fg-body transition-colors hover:bg-surface-subtle"
                 >
-                  {t}
-                </button>
+                  {t.label}
+                </a>
               ))}
             </CardBody>
           </Card>

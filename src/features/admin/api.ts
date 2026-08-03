@@ -1,226 +1,179 @@
-import { useFixture } from '@/lib/fixtures'
-import type { MetricTone } from '@/components/patterns/metric-card'
+import { useDelete, useGetData, usePatchData, usePostData } from '@/hooks/use-api'
+import type { Cursored } from '@/types'
+import type {
+  AcademicManagementResponse,
+  AdminFinanceResponse,
+  AdmissionsResponse,
+  ApplicationDetailResponse,
+  AssignSlotRequest,
+  AuditEntry,
+  ChangeUserStatusRequest,
+  ChangeUserStatusResult,
+  CreateUserRequest,
+  DecideApplicationRequest,
+  DecideApplicationResult,
+  ExamHubResponse,
+  ExamScheduleResponse,
+  LedgerEntry,
+  MarksEntryResponse,
+  PublishMarksRequest,
+  PublishMarksResult,
+  SaveMarksRequest,
+  SaveMarksResult,
+  UserManagementResponse,
+  UserRow,
+  UserSecurityProfileResponse,
+} from '@/types/admin'
 
-/** Admin/ERP module data (Phase 6 — 10 screens). Content from Figma 7:* frames. */
+/**
+ * Admin/ERP module data (13 screens). Contract: docs/api/admin.md.
+ *
+ * Two things run through everything here:
+ *
+ * - **Lists paginate and search server-side.** The directory is 12,000 rows;
+ *   there is no fetch-it-all-and-filter option, and the metrics describe the
+ *   whole collection rather than the current page.
+ * - **Almost nothing is optimistic.** These writes are institutional facts —
+ *   a locked-out account, a sent offer letter, a published result. Showing
+ *   one before it is true is a correctness bug. See docs/api/admin.md §6.
+ */
 
-export type UserRow = {
-  id: string
-  name: string
-  email: string
-  role: string
-  department: string
-  active: boolean
+export const useAdminAcademic = () =>
+  useGetData<AcademicManagementResponse>('/api/admin/academic/', ['admin', 'academic'])
+
+// ---------------------------------------------------------------- users
+
+export type UserFilters = { q: string; role: string; status: string; page: number }
+
+const usersKey = (f: UserFilters) => ['admin', 'users', f.q, f.role, f.status, f.page]
+
+export const useUserManagement = (f: UserFilters) => {
+  const params = new URLSearchParams({ page: String(f.page), page_size: '20' })
+  if (f.q) params.set('q', f.q)
+  if (f.role !== 'ALL') params.set('role', f.role)
+  if (f.status !== 'ALL') params.set('status', f.status)
+
+  return useGetData<UserManagementResponse>(`/api/admin/users/?${params}`, usersKey(f))
 }
 
-export const useUserManagement = () =>
-  useFixture<{ metrics: { label: string; value: string; tone: MetricTone }[]; users: UserRow[] }>(
+export const useCreateUser = (f: UserFilters) =>
+  usePostData<UserRow, CreateUserRequest>('/api/admin/users/', usersKey(f))
+
+export const useSecurityProfile = (userId: string) =>
+  useGetData<UserSecurityProfileResponse>(`/api/admin/users/${userId}/security/`, [
+    'admin',
+    'users',
+    userId,
+    'security',
+  ])
+
+/**
+ * Never optimistic: this locks a real person out of the portal. It must be
+ * recorded server-side before the UI claims it happened, and the response
+ * carries the audit entry so the confirmation can say what was written.
+ */
+export const useChangeUserStatus = (userId: string) =>
+  usePatchData<ChangeUserStatusResult, ChangeUserStatusRequest>(
+    `/api/admin/users/${userId}/status/`,
     ['admin', 'users'],
-    {
-      metrics: [
-        { label: 'Total Users', value: '2,548', tone: 'brand' },
-        { label: 'Active Users', value: '2,312', tone: 'success' },
-        { label: 'Inactive Users', value: '236', tone: 'warning' },
-        { label: 'User Roles', value: '8', tone: 'accent' },
-        { label: 'New Users', value: '127', tone: 'info' },
-      ],
-      users: [
-        { id: 'U-1001', name: 'Dr. Hasan Mahmud', email: 'hasan.mahmud@unigpt.edu', role: 'Faculty', department: 'CSE', active: true },
-        { id: 'U-1002', name: 'Alex Rivera', email: 'alex.rivera@unigpt.edu', role: 'Student', department: 'CSE', active: true },
-        { id: 'U-1003', name: 'Sarah Jenkins', email: 's.jenkins@unigpt.edu', role: 'Faculty', department: 'CSE', active: true },
-        { id: 'U-1004', name: 'Admin Staff', email: 'admin@unigpt.edu', role: 'Admin', department: 'Registry', active: true },
-        { id: 'U-1005', name: 'Marcus Chen', email: 'm.chen@unigpt.edu', role: 'Student', department: 'BBA', active: false },
-      ],
-    },
   )
 
-export const useSecurityProfile = (id: string) =>
-  useFixture<{
-    user: { name: string; role: string; department: string }
-    stats: { label: string; value: string; tone: MetricTone }[]
-    devices: { name: string; meta: string; current: boolean }[]
-    location: string
-    notes: { label: string; body: string }[]
-  }>(['admin', 'users', id], {
-    user: { name: 'Dr. Hasan Mahmud', role: 'Faculty', department: 'Computer Science & Engineering' },
-    stats: [
-      { label: 'Logins (30d)', value: '142', tone: 'brand' },
-      { label: 'Trust Score', value: '98/100', tone: 'success' },
-    ],
-    devices: [
-      { name: 'MacBook Pro 14"', meta: 'San Francisco, USA • Active now', current: true },
-      { name: 'iPhone 15 Pro', meta: 'Last used: 2h ago', current: false },
-    ],
-    location: 'San Francisco, USA',
-    notes: [
-      { label: 'Access Policy', body: 'Policy compliant across all units.' },
-      { label: 'Credentials', body: 'Expiring within the next 48 hours.' },
-    ],
-  })
+export const useRevokeSession = (userId: string) =>
+  useDelete<AuditEntry, string>(
+    (sessionId) => `/api/admin/users/${userId}/sessions/${sessionId}/`,
+    ['admin', 'users', userId, 'security'],
+  )
 
-export type Application = {
-  id: string
-  name: string
-  program: string
-  school: string
-  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+export const useSendPasswordReset = (userId: string) =>
+  usePostData<AuditEntry, void>(`/api/admin/users/${userId}/password-reset/`, [
+    'admin',
+    'users',
+    userId,
+    'security',
+  ])
+
+// ----------------------------------------------------------- admissions
+
+export type AdmissionFilters = { q: string; status: string; page: number }
+
+export const useAdmissions = (f: AdmissionFilters) => {
+  const params = new URLSearchParams({ page: String(f.page), page_size: '20' })
+  if (f.q) params.set('q', f.q)
+  if (f.status !== 'ALL') params.set('status', f.status)
+
+  return useGetData<AdmissionsResponse>(`/api/admin/admissions/?${params}`, [
+    'admin',
+    'admissions',
+    f.q,
+    f.status,
+    f.page,
+  ])
 }
 
-export const useAdmissions = () =>
-  useFixture<{
-    metrics: { label: string; value: string; tone: MetricTone }[]
-    programs: { name: string; school: string; applicants: number }[]
-    applications: Application[]
-  }>(['admin', 'admissions'], {
-    metrics: [
-      { label: 'Total Applications', value: '1,248', tone: 'brand' },
-      { label: 'Pending Verification', value: '312', tone: 'warning' },
-      { label: 'Approved Admissions', value: '842', tone: 'success' },
-      { label: 'Rejected Applications', value: '94', tone: 'danger' },
-    ],
-    programs: [
-      { name: 'B.Sc. in CSE', school: 'Computer Science', applicants: 512 },
-      { name: 'BBA in Finance', school: 'Business School', applicants: 386 },
-      { name: 'B.Eng in Robotics', school: 'Engineering', applicants: 350 },
-    ],
-    applications: [
-      { id: 'HS-99120', name: 'Rahim Hasan', program: 'B.Sc. in CSE', school: 'Computer Science', status: 'PENDING' },
-      { id: 'HS-99121', name: 'Nusrat Jahan', program: 'BBA in Finance', school: 'Business School', status: 'PENDING' },
-      { id: 'HS-99122', name: 'Tanvir Alam', program: 'B.Eng in Robotics', school: 'Engineering', status: 'APPROVED' },
-    ],
-  })
+export const useApplicationDetail = (id: string) =>
+  useGetData<ApplicationDetailResponse>(`/api/admin/admissions/${id}/`, [
+    'admin',
+    'admissions',
+    id,
+  ])
 
-export const useApplicationReview = (id: string) =>
-  useFixture<{
-    student: { name: string; id: string }
-    personal: { label: string; value: string }[]
-    scores: { label: string; value: string }[]
-    templates: string[]
-  }>(['admin', 'admissions', id], {
-    student: { name: 'Rahim Hasan', id: 'HS-99120' },
-    personal: [
-      { label: 'Date of Birth', value: 'January 15, 2004' },
-      { label: 'Nationality', value: 'Bangladeshi' },
-      { label: 'Primary Contact', value: 'rahim.hasan@email.com' },
-      { label: 'Phone', value: '+880 1712-345678' },
-    ],
-    scores: [
-      { label: 'IELTS', value: '7.5' },
-      { label: 'SAT', value: '1480' },
-    ],
-    templates: ['Standard Offer Letter', 'Conditional Offer', 'Scholarship Offer'],
-  })
+/**
+ * Never optimistic and never repeatable: this sends an offer or rejection
+ * letter. A second attempt on a decided application returns 409.
+ */
+export const useDecideApplication = (id: string) =>
+  usePostData<DecideApplicationResult, DecideApplicationRequest>(
+    `/api/admin/admissions/${id}/decision/`,
+    ['admin', 'admissions'],
+  )
 
-export const useAcademicManagement = () =>
-  useFixture<{
-    metrics: { label: string; value: string; tone: MetricTone }[]
-    departments: { name: string; programs: number; faculty: number; students: number }[]
-  }>(['admin', 'academic'], {
-    metrics: [
-      { label: 'Departments', value: '24', tone: 'brand' },
-      { label: 'Programs', value: '112', tone: 'accent' },
-      { label: 'Courses', value: '642', tone: 'info' },
-      { label: 'Faculty', value: '1,248', tone: 'success' },
-      { label: 'Students', value: '12,485', tone: 'warning' },
-    ],
-    departments: [
-      { name: 'Computer Science & Engineering', programs: 8, faculty: 142, students: 2450 },
-      { name: 'Business Administration', programs: 6, faculty: 98, students: 1820 },
-      { name: 'Engineering', programs: 11, faculty: 176, students: 1440 },
-      { name: 'Pharmacy', programs: 4, faculty: 62, students: 880 },
-    ],
-  })
+// ------------------------------------------------------------------ exams
+
+export const useExamHub = () => useGetData<ExamHubResponse>('/api/admin/exams/', ['admin', 'exams'])
+
+const SCHEDULE_KEY = ['admin', 'exams', 'schedule']
+
+export const useExamSchedule = () =>
+  useGetData<ExamScheduleResponse>('/api/admin/exams/schedule/', SCHEDULE_KEY)
+
+/**
+ * Returns the whole schedule, not the one slot: assigning a hall can resolve
+ * or create a conflict in a different row, and patching one row would leave
+ * the rest of the grid lying about its own state.
+ */
+export const useAssignSlot = (slotId: string) =>
+  usePatchData<ExamScheduleResponse, AssignSlotRequest>(
+    `/api/admin/exams/schedule/${slotId}/`,
+    SCHEDULE_KEY,
+  )
+
+const MARKS_KEY = ['admin', 'exams', 'marks']
+
+export const useMarksEntry = () => useGetData<MarksEntryResponse>('/api/admin/exams/marks/', MARKS_KEY)
+
+/** Batched, partial-success. Same contract as the faculty gradebook. */
+export const useSaveMarks = () =>
+  usePatchData<SaveMarksResult, SaveMarksRequest>('/api/admin/exams/marks/', MARKS_KEY)
+
+/**
+ * The most irreversible action in the product — every student in the section
+ * sees their result at once. Guarded by a typed confirmation server-side.
+ */
+export const usePublishMarks = () =>
+  usePostData<PublishMarksResult, PublishMarksRequest>('/api/admin/exams/marks/publish/', MARKS_KEY)
+
+// ---------------------------------------------------------------- finance
 
 export const useAdminFinance = () =>
-  useFixture<{
-    metrics: { label: string; value: string; tone: MetricTone }[]
-    breakdown: { label: string; percent: number; tone: MetricTone }[]
-    transactions: { title: string; party: string; amount: number; inbound: boolean }[]
-  }>(['admin', 'finance'], {
-    metrics: [
-      { label: 'Total Revenue YTD', value: '128.75M', tone: 'success' },
-      { label: 'Total Expenses YTD', value: '78.42M', tone: 'warning' },
-      { label: 'Net Profit YTD', value: '50.33M', tone: 'brand' },
-      { label: 'Pending Invoices', value: '23.45M', tone: 'danger' },
-      { label: 'Total Receivables', value: '34.68M', tone: 'info' },
-    ],
-    breakdown: [
-      { label: 'Tuition', percent: 68, tone: 'brand' },
-      { label: 'Hostel & Transport', percent: 14, tone: 'accent' },
-      { label: 'Grants', percent: 11, tone: 'info' },
-      { label: 'Other', percent: 7, tone: 'warning' },
-    ],
-    transactions: [
-      { title: 'Tuition Fee - CSE-042', party: 'Student: Faisal Ahmed', amount: 42500, inbound: true },
-      { title: 'Server Maintenance', party: 'Vendor: AWS Cloud', amount: 128000, inbound: false },
-      { title: 'Library Fines Batch B', party: '52 Transactions', amount: 18400, inbound: true },
-      { title: 'Tuition Fee - BBA-201', party: 'Rafiqul Islam • BBA - 3rd Year', amount: 38000, inbound: true },
-      { title: 'Laboratory Supplies', party: 'Dept: Pharmacy', amount: 96000, inbound: false },
-      { title: 'Tuition Fee - EEE-101', party: 'Zubayer Al Mahmud • EEE - 1st Year', amount: 41000, inbound: true },
-    ],
-  })
+  useGetData<AdminFinanceResponse>('/api/admin/finance/', ['admin', 'finance'])
 
-export const useExamHub = () =>
-  useFixture<{
-    metrics: { label: string; value: string; tone: MetricTone }[]
-    ongoing: { title: string; place: string }[]
-    log: { text: string; when: string }[]
-  }>(['admin', 'exams'], {
-    metrics: [
-      { label: 'Total Exams', value: '48', tone: 'brand' },
-      { label: 'Ongoing Exams', value: '12', tone: 'warning' },
-      { label: 'Completed Exams', value: '26', tone: 'success' },
-      { label: 'Results Published', value: '18', tone: 'info' },
-    ],
-    ongoing: [
-      { title: 'Psychology 101', place: 'Hall B-12 • 10:00 AM' },
-      { title: 'Linear Algebra', place: 'Main Library • 02:00 PM' },
-      { title: 'Robotics Lab Final', place: 'Tech Center • 09:00 AM' },
-    ],
-    log: [
-      { text: 'Prof. Miller published Physics results.', when: '2 minutes ago' },
-      { text: 'Admin Sarah rescheduled CSE-402.', when: '45 minutes ago' },
-      { text: 'Discrepancy in B.Arch Semester III.', when: '2 hours ago' },
-    ],
-  })
+export const useLedger = (direction: string) =>
+  useGetData<Cursored<LedgerEntry>>(
+    `/api/admin/finance/ledger/${direction !== 'ALL' ? `?direction=${direction}` : ''}`,
+    ['admin', 'finance', 'ledger', direction],
+  )
 
-export const useExamScheduling = () =>
-  useFixture<{
-    metrics: { label: string; value: string; tone: MetricTone }[]
-    slots: { code: string; name: string; hall: string; proctor: string; state: 'CONFIRMED' | 'PENDING' | 'UNASSIGNED' }[]
-    aiNote: string
-  }>(['admin', 'exams', 'schedule'], {
-    metrics: [
-      { label: 'Scheduled Courses', value: '18', tone: 'brand' },
-      { label: 'Assigned Halls', value: '12 Halls', tone: 'accent' },
-      { label: 'Proctor Allocation', value: '95%', tone: 'success' },
-      { label: 'Conflict Alerts', value: '02', tone: 'danger' },
-    ],
-    slots: [
-      { code: 'CSE-201', name: 'Data Structures', hall: 'Hall 101', proctor: 'Dr. Sarah Jenkins', state: 'CONFIRMED' },
-      { code: 'MAT-105', name: 'Calculus II', hall: 'Hall 202', proctor: 'Prof. Alan Turing', state: 'CONFIRMED' },
-      { code: 'PHY-301', name: 'Quantum Theory', hall: 'Hall 303', proctor: 'Dr. Robert Oppen', state: 'PENDING' },
-      { code: 'GEN-102', name: 'Ethics & AI', hall: 'Reserve 1', proctor: 'Unassigned', state: 'UNASSIGNED' },
-    ],
-    aiNote:
-      'Our AI optimization engine can auto-fill the remaining 6 slots based on previous availability.',
-  })
+// Re-exported so the ops screens can keep their own file.
+export { useAdminSettings, useSaveSettings, useSupport, useSystemHealth, useUpdateTicket } from './api-ops'
 
-export type MarkRow = { id: string; name: string; marks: number | null }
-
-export const useMarksEntry = () =>
-  useFixture<{
-    course: { id: string; students: number; weightage: string; status: string }
-    rows: MarkRow[]
-    insight: string
-  }>(['admin', 'exams', 'marks'], {
-    course: { id: 'CSE-301', students: 52, weightage: '30%', status: 'Pending' },
-    rows: [
-      { id: '21-45092-2', name: 'Adnan Rahman', marks: 26 },
-      { id: '21-45093-1', name: 'Sarah Jenkins', marks: 28 },
-      { id: '21-45094-3', name: 'Marcus Chen', marks: null },
-      { id: '21-45095-4', name: 'Fatima Noor', marks: 24 },
-      { id: '21-45096-5', name: 'David Wilson', marks: null },
-    ],
-    insight:
-      'Section A is performing 12% better in algorithm complexity than the historical mean. Consider increasing difficulty for the final exam.',
-  })
+export type { UserRow }

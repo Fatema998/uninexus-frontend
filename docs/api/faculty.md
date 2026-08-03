@@ -8,9 +8,9 @@ covering all 14 faculty screens in [screen-inventory.md](../screen-inventory.md)
 - **Check it:** `bun run mock:test`
 
 **Conventions are shared** — base URL, formats, envelopes, transport,
-compression, caching, errors and auth are all in
-[student.md §1](student.md#1-conventions) and apply here unchanged. This
-document covers only what is different about faculty.
+compression, caching, errors, auth and the optimistic-UI pattern are in
+**[general.md](general.md)** and apply here unchanged. This document covers
+only what is different about faculty.
 
 ---
 
@@ -204,7 +204,7 @@ otherwise, with `queuePosition`. Both are successes; only the wording changes.
 ## 3. What the client sends
 
 Same headers as the student contract
-([student.md §4](student.md#4-what-the-client-sends)). One addition worth
+([general.md §7](general.md#7-auth)). One addition worth
 stating: the client never sends the faculty member's own id. The JWT has it,
 and an endpoint that accepted it would let one teacher grade in another's
 name.
@@ -251,13 +251,13 @@ and then quietly revert two. The teacher has already moved on. Wait for
 `SaveGradesResult` and mark the rejected cells in place.
 
 The pattern and the `useOptimistic` helper are documented once in
-[student.md §5.4](student.md#54-the-pattern).
+[general.md §9](general.md#9-optimistic-ui).
 
 ---
 
 ## 6. Mock server
 
-Same as [student.md §8](student.md#8-mock-server) — `bun run mock`,
+Same as [general.md §8](general.md#8-mock-server) — `bun run mock`,
 `VITE_API_URL=http://localhost:8787 bun run dev`, sign in as `faculty` with
 any password. `?_delay` and `?_fail` work on faculty routes too.
 

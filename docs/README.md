@@ -14,15 +14,14 @@ Design and build documentation for **UniGPT** — an AI-native university portal
 | [design.md](design.md) | **Token authority.** Colours, type, spacing, radius, components, layout rules | Writing any UI. Every visual value comes from here |
 | [screen-inventory.md](screen-inventory.md) | All 93 frames → node IDs → routes, canonical vs superseded | Picking up a screen; wiring routes; pulling a frame from Figma |
 | [architecture.md](architecture.md) | Stack, directory layout, routing, data layer, conventions | Deciding where a file goes or how to fetch something |
-| [api/student.md](api/student.md) | **Wire contract.** Every student endpoint, request/response types, optimistic-UI policy, transport | Wiring a student screen to the API; briefing the backend dev |
+| [api/general.md](api/general.md) | **Wire conventions.** Formats, envelopes, errors, auth, transport, compression, optimistic-UI pattern | Before any API work — the other three assume it |
+| [api/student.md](api/student.md) | Student endpoints — screen-shaped payloads, the separate assistant, payment flow | Wiring a student screen |
 | [api/faculty.md](api/faculty.md) | Faculty endpoints — section scoping, whole-object writes, why almost nothing is optimistic | Wiring a faculty screen; anything that writes to a student's record |
+| [api/admin.md](api/admin.md) | Admin endpoints — pagination at scale, PII boundaries, optimistic locking, irreversible actions | Wiring an admin screen; anything institution-wide |
 | [build-plan.md](build-plan.md) | 7 phases, tasks, dependencies, definitions of done | Planning a sprint; knowing what's next |
 
-`api/admin.md` follows the same shape. The persona-neutral conventions
-(formats, envelopes, transport, errors, auth) live in
-[api/student.md §1](api/student.md) and are referenced rather than repeated;
-they lift out to `api/general.md` once admin lands and there are three
-consumers.
+Read `general.md` once, then the persona you are working in. The three
+persona docs deliberately repeat nothing from it.
 
 ## Order to read them
 
@@ -70,7 +69,7 @@ VITE_API_URL=http://localhost:8787 bun run dev  # app against it
 bun run mock:test                               # verify the mock still matches the contract
 ```
 
-All 61 student read endpoints and 23 writes are live, plus 15 faculty reads
-and 8 writes, typed against `src/types`. Every student screen is on the real
-fetch path; faculty screens are next per
-[api/student.md §9](api/student.md).
+Every screen in the product — 60 student, 14 faculty, 13 admin — is on the
+real fetch path. There are no fixtures left; `src/lib/fixtures.ts` is gone.
+The mock serves 90 GET endpoints and 42 writes, all typed against `src/types`,
+and `bun run mock:test` covers the contract guardrails.

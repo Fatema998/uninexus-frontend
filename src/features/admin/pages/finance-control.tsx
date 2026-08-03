@@ -6,6 +6,7 @@ import { ProgressBar } from '@/components/patterns/progress-bar'
 import { QueryState } from '@/components/states'
 import { money } from '@/lib/format'
 import { useAdminFinance } from '../api'
+import { relative } from '@/lib/format'
 
 /** ERP Finance & Accounts Control Center — Figma 7:11851. */
 export function FinanceControl() {
@@ -28,11 +29,13 @@ export function FinanceControl() {
               <CardHeader title="Revenue Breakdown" />
               <CardBody className="flex flex-col gap-4">
                 <p className="text-fg-muted">Year-to-date category split</p>
-                {d.breakdown.map((b) => (
-                  <div key={b.label}>
+                {d.revenueBreakdown.map((b) => (
+                  <div key={b.id}>
                     <div className="mb-1.5 flex items-baseline justify-between">
                       <span className="text-link text-fg-heading">{b.label}</span>
-                      <span className="text-fg-muted">{b.percent}%</span>
+                      <span className="text-fg-muted">
+                        {money(b.amount)} • {b.percent}%
+                      </span>
                     </div>
                     <ProgressBar value={b.percent} tone={b.tone} label={b.label} />
                   </div>
@@ -43,9 +46,9 @@ export function FinanceControl() {
             <Card>
               <CardHeader title="Recent Transactions" />
               <CardBody className="flex flex-col gap-3">
-                {d.transactions.map((t) => (
+                {d.recentEntries.map((t) => (
                   <div
-                    key={t.title + t.party}
+                    key={t.id}
                     className="flex flex-wrap items-center gap-4 rounded-control border border-border-strong bg-surface p-4"
                   >
                     <span
@@ -63,7 +66,9 @@ export function FinanceControl() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-link text-fg-heading">{t.title}</p>
-                      <p className="truncate text-fg-muted">{t.party}</p>
+                      <p className="truncate text-fg-muted">
+                        {t.party} • {t.reference} • {relative(t.at)}
+                      </p>
                     </div>
                     <span className={t.inbound ? 'text-link text-success' : 'text-link text-warning'}>
                       {t.inbound ? '+' : '-'}{money(t.amount)}
