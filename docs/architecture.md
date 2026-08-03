@@ -21,10 +21,14 @@ Already installed — nothing here is a proposal:
 
 ### Two additions needed
 
-| Need | Choice | Why |
+| Need | Choice | Status |
 |---|---|---|
-| Routing | `react-router` v7 | 83 routes across 3 role-scoped shells. No router is installed. |
-| Charts | `recharts` | Enrolment line, distribution donut, analytics screens. Only add at Phase 4 — earlier screens don't need it. |
+| Routing | `react-router` v8 | Installed (Phase 0). |
+| Charts | `recharts` | Installed (Phase 3). Only the admin dashboard imports it, so it stays in that route's chunk. |
+
+Auth is **JWT against a Django backend** owned by another developer, following
+DRF SimpleJWT conventions (`/api/token/`, `/api/token/refresh/`). No auth
+library is needed — `src/lib/auth.ts` is ~90 lines.
 
 Add nothing else without a screen that demands it. Date formatting is `Intl.DateTimeFormat`; currency is `Intl.NumberFormat`; neither needs a library.
 
@@ -104,7 +108,13 @@ Three role-scoped shells, lazy screens:
 
 ## 5. Data
 
-`src/hooks/use-api.ts` already provides `useGetData` / `usePostData` / `usePutData` / `usePatchData` / `useDelete` over a `VITE_API_URL` base, with `ApiError` and automatic invalidation. **Use it. Do not add a second fetch layer.**
+`src/hooks/use-api.ts` provides `useGetData` / `usePostData` / `usePutData` / `usePatchData` / `useDelete` over a `VITE_API_URL` base, with `ApiError` and automatic invalidation. **Use it. Do not add a second fetch layer.**
+
+`apiFetch` is the single chokepoint every hook routes through, so the JWT
+`Authorization` header and refresh-on-401 live there and nowhere else.
+Concurrent 401s share one in-flight refresh rather than racing; when a refresh
+fails it clears the tokens and fires `AUTH_EXPIRED_EVENT`, which `AuthProvider`
+listens for to drop the session.
 
 Each module wraps it with typed hooks:
 
@@ -116,7 +126,24 @@ export const useAttendanceSummary = () =>
 
 Query-key convention: `[module, resource, ...params]`.
 
-Until the backend question (PRD §6.1) is answered, back these with typed fixtures in `features/<module>/fixtures.ts` returned by an MSW handler or a dev-only fetch shim. The hook signatures stay identical, so switching to a real API is an env-var change and nothing else.
+Until the Django endpoints exist, back these with `useFixture` from `src/lib/fixtures.ts` — same return shape as `useGetData`, so components never learn the difference. Swapping a module to the real API is a one-line change in its `api.ts`:
+
+```diff
+-  useFixture<StudentDashboard>(['student', 'dashboard'], { … })
++  useGetData<StudentDashboard>('/student/dashboard', ['student', 'dashboard'])
+```
+
+### What the Django side must provide
+
+The access token needs custom claims — SimpleJWT does not emit these by default, and without `role` the app cannot pick a shell and treats the user as unauthenticated:
+
+| Claim | Required | Used for |
+|---|---|---|
+| `role` | **yes** | `student` \| `faculty` \| `admin` — selects the shell and guards routes |
+| `full_name` or `name` | no | Topbar and sidebar identity |
+| `email` | no | Fallback display name |
+| `department` | no | Identity subtitle |
+| `exp` | yes | Standard expiry |
 
 ---
 

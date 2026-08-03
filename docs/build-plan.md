@@ -1,5 +1,11 @@
 # Build Plan
 
+> **Status 2026-08-03 — Phases 0–3 are done and merged.** Auth is JWT against a
+> Django backend owned by another developer. Phases 4–6 are the remaining work;
+> start at 4.1. Run `bun run dev` and sign in as `student` / `faculty` / `admin`
+> (any password) — a dev-only seam mints a local token while `VITE_API_URL` is
+> unset. See [architecture.md §5](architecture.md#5-data).
+
 Seven phases. Each is independently shippable, each has a definition of done you can actually run.
 
 The ordering principle: **build the token layer and the shells before any screen, and build one screen per module before building the rest.** The dashboards exercise nearly every component in the system — once they're right, the remaining 70+ screens are assembly.

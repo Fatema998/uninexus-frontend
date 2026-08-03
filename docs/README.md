@@ -44,4 +44,12 @@ Nine of them, in [prd.md §6](prd.md#6-open-questions) — backend, auth, curren
 
 ## Current state
 
-The repo is a Vite + React 19 + TS template with Tailwind v4, shadcn (one component), and a React Query wrapper. **`bun run build` currently fails** — see [build-plan.md](build-plan.md) Phase 0.1. No product code exists yet.
+**Phases 0–3 are done.** Token layer, pattern components, the three role shells, all 83 routes, JWT auth, and the three dashboards are built and verified. Phases 4–6 (the 80 remaining screens) are next — start at [build-plan.md](build-plan.md) 4.1.
+
+```bash
+bun install && bun run dev
+```
+
+Sign in as `student`, `faculty`, or `admin` with any password. While `VITE_API_URL` is unset, a dev-only seam (`src/lib/dev-auth.ts`) mints a local token so the UI runs without the Django backend. Set `VITE_API_URL` and the seam disables itself.
+
+Every unbuilt screen already has a route and renders a placeholder that deep-links to its Figma node — so picking up any screen needs no doc lookup.
