@@ -23,10 +23,23 @@ export function ResearchPortfolio() {
           <Card>
             <CardHeader title="Published Papers" />
             <CardBody className="flex flex-col gap-3">
-              {d.papers.map((p) => (
-                <div key={p.title} className="rounded-control border border-border-strong bg-surface p-4">
-                  <p className="text-link text-fg-heading">{p.title}</p>
-                  <p className="text-fg-muted">{p.venue}</p>
+              {d.publications.map((p) => (
+                <div key={p.id} className="rounded-control border border-border-strong bg-surface p-4">
+                  {p.doi ? (
+                    <a
+                      href={`https://doi.org/${p.doi}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-link text-brand-700 hover:underline"
+                    >
+                      {p.title}
+                    </a>
+                  ) : (
+                    <p className="text-link text-fg-heading">{p.title}</p>
+                  )}
+                  <p className="text-fg-muted">
+                    {p.venue}, {p.year} • {p.citationCount} citations
+                  </p>
                 </div>
               ))}
             </CardBody>

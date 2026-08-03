@@ -1,4 +1,5 @@
 import { Calendar, ClipboardCheck, FileText, Megaphone, Sparkles, Star } from 'lucide-react'
+import { Link } from 'react-router'
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { DataTable } from '@/components/patterns/data-table'
 import { MetricCard } from '@/components/patterns/metric-card'
@@ -6,7 +7,9 @@ import { Badge } from '@/components/patterns/badge'
 import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/states'
 import { useAuth } from '@/features/auth/auth-context'
-import { useFacultyDashboard, type FacultyDashboard as Data } from './api'
+import { relative, timeRange } from '@/lib/format'
+import { useFacultyDashboard } from './api'
+import type { FacultyDashboardResponse } from '@/types/faculty'
 import { iconFor } from './icon-map'
 
 const QUICK_ACTIONS = [
@@ -32,7 +35,7 @@ export function FacultyDashboard() {
               <p className="text-fg-muted">
                 Welcome back, {user?.name ?? 'Professor'} 👋{' '}
                 <span className="text-brand-700">
-                  You have {d.schedule.length} classes today.
+                  You have {d.todaySchedule.length} classes today.
                 </span>
               </p>
             </div>
@@ -55,14 +58,18 @@ export function FacultyDashboard() {
                 action={{ label: 'View Calendar', to: '/faculty/academic' }}
               />
               <CardBody className="grid gap-4 sm:grid-cols-2">
-                {d.schedule.map((s) => (
+                {d.todaySchedule.map((s) => (
                   <div
-                    key={s.title}
+                    key={s.id}
                     className="rounded-control border border-border-strong bg-surface-subtle p-4"
                   >
                     <Badge tone={s.state === 'CURRENT' ? 'brand' : 'neutral'}>{s.state}</Badge>
-                    <p className="mt-2 text-link text-fg-heading">{s.title}</p>
-                    <p className="text-fg-muted">{s.meta}</p>
+                    <p className="mt-2 text-link text-fg-heading">
+                      {s.section.course.title} — Sec {s.section.name}
+                    </p>
+                    <p className="text-fg-muted">
+                      {s.room} • {timeRange(s.startsAt, s.endsAt)}
+                    </p>
                     {s.state === 'CURRENT' && (
                       <Button size="sm" className="mt-3">
                         Launch AI Assistant
@@ -75,7 +82,7 @@ export function FacultyDashboard() {
 
             <Card>
               <CardHeader title="My Courses" action={{ label: 'View all', to: '/faculty/courses' }} />
-              <CoursesTable rows={d.courses} />
+              <SectionsTable rows={d.sections} />
             </Card>
 
             <Card>
@@ -83,17 +90,19 @@ export function FacultyDashboard() {
                 <Badge tone="danger">{d.metrics[3]?.value ?? '0'} NEW</Badge>
               </CardHeader>
               <CardBody className="flex flex-col gap-3">
-                {d.reviews.map((r) => (
+                {d.pendingReviews.map((r) => (
                   <div
-                    key={r.title}
+                    key={r.id}
                     className="flex items-center gap-4 rounded-control border border-border-strong bg-surface p-4"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-link text-fg-heading">{r.title}</p>
-                      <p className="truncate text-fg-muted">{r.meta}</p>
+                      <p className="truncate text-link text-fg-heading">{r.assignmentTitle}</p>
+                      <p className="truncate text-fg-muted">
+                        Submitted by {r.student.fullName} • {relative(r.submittedAt)}
+                      </p>
                     </div>
-                    <Button variant="outline" size="sm">
-                      Review
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/faculty/assignments/${r.id}/review`}>Review</Link>
                     </Button>
                   </div>
                 ))}
@@ -138,17 +147,17 @@ export function FacultyDashboard() {
             <Card>
               <CardHeader title="Teaching Analytics" />
               <CardBody className="text-center">
-                <TeachingRing {...d.teaching} />
+                <TeachingRing completed={d.teachingLoad.completedHours} remaining={d.teachingLoad.remainingHours} />
                 <ul className="mt-4 flex flex-col gap-1 text-left">
                   <li className="flex items-center gap-2">
                     <span className="size-2 rounded-full bg-brand-600" aria-hidden />
                     <span className="text-fg-body">Completed</span>
-                    <span className="ml-auto text-link text-fg-heading">{d.teaching.completed} hrs</span>
+                    <span className="ml-auto text-link text-fg-heading">{d.teachingLoad.completedHours} hrs</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <span className="size-2 rounded-full bg-track" aria-hidden />
                     <span className="text-fg-body">Remaining</span>
-                    <span className="ml-auto text-link text-fg-heading">{d.teaching.remaining} hrs</span>
+                    <span className="ml-auto text-link text-fg-heading">{d.teachingLoad.remainingHours} hrs</span>
                   </li>
                 </ul>
               </CardBody>
@@ -158,11 +167,11 @@ export function FacultyDashboard() {
               <CardHeader title="Recent Activities" icon={Calendar} />
               <CardBody className="flex flex-col gap-4">
                 {d.activity.map((a) => (
-                  <div key={a.title} className="flex gap-3">
+                  <div key={a.id} className="flex gap-3">
                     <span className="mt-1.5 size-2 shrink-0 rounded-full bg-brand-600" aria-hidden />
                     <div>
                       <p className="text-link text-fg-heading">{a.title}</p>
-                      <p className="text-fg-muted">{a.meta}</p>
+                      <p className="text-fg-muted">{relative(a.at)}</p>
                     </div>
                   </div>
                 ))}
@@ -183,11 +192,11 @@ export function FacultyDashboard() {
   )
 }
 
-function CoursesTable({ rows }: { rows: Data['courses'] }) {
+function SectionsTable({ rows }: { rows: FacultyDashboardResponse['sections'] }) {
   return (
     <DataTable
       rows={rows}
-      getRowKey={(r) => r.code}
+      getRowKey={(r) => r.id}
       empty={{ title: 'No courses assigned', description: 'Assigned courses appear here each semester.' }}
       columns={[
         {
@@ -196,15 +205,16 @@ function CoursesTable({ rows }: { rows: Data['courses'] }) {
           cell: (r) => (
             <span className="flex items-center gap-3">
               <span className="grid size-8 shrink-0 place-items-center rounded-control bg-brand-600/10 text-eyebrow text-brand-700">
-                {r.tag}
+                {/* First letters of the code, e.g. CSE-3101 -> CSE */}
+                {r.course.code.split('-')[0]}
               </span>
-              <span className="text-fg-heading">{r.name}</span>
+              <span className="text-fg-heading">{r.course.title}</span>
             </span>
           ),
         },
-        { key: 'code', header: 'ID', cell: (r) => r.code },
-        { key: 'section', header: 'Section', cell: (r) => r.section },
-        { key: 'students', header: 'Students', cell: (r) => r.students, className: 'text-right' },
+        { key: 'code', header: 'ID', cell: (r) => r.course.code },
+        { key: 'section', header: 'Section', cell: (r) => `Section ${r.name}` },
+        { key: 'students', header: 'Students', cell: (r) => r.enrolledCount, className: 'text-right' },
       ]}
     />
   )

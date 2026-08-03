@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router'
+import { cn } from '@/lib/utils'
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { Button } from '@/components/ui/button'
@@ -18,122 +20,203 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { QueryState } from '@/components/states'
-import { useGradebook, type GradeRow } from '../api'
+import { EmptyState, QueryState } from '@/components/states'
+import { useAssignedSections, useGradebook, useSaveGrades } from '../api'
 
-type Edits = Record<string, Record<string, string>>
+/** `${studentId}:${columnId}` -> raw input text. */
+type Edits = Record<string, string>
+const cellKey = (studentId: string, columnId: string) => `${studentId}:${columnId}`
 
 /**
  * Faculty Grade Book — Figma 2:169.
- * Bulk entry grid. Unsaved edits are tracked so the save button reflects real
- * pending work rather than always being enabled.
+ *
+ * Bulk entry, saved in one batched PATCH. Deliberately not optimistic: the
+ * server may keep 28 of 30 cells, and patching all 30 would show them land
+ * and then quietly revert two after the teacher has moved on. We wait, then
+ * mark the rejected cells in place. See docs/api/faculty.md §2.4.
  */
 export function FacultyGradebook() {
-  const query = useGradebook()
+  const sections = useAssignedSections()
+  const [params, setParams] = useSearchParams()
+
+  return (
+    <QueryState query={sections}>
+      {(s) => {
+        const activeId = params.get('section') ?? s.sections[0]?.id
+        if (!activeId) return <EmptyState title="No sections assigned" />
+
+        return (
+          <Sheet
+            sectionId={activeId}
+            sections={s.sections.map((x) => ({ id: x.id, label: `${x.course.code} Sec ${x.name}` }))}
+            onPick={(id) => setParams({ section: id })}
+          />
+        )
+      }}
+    </QueryState>
+  )
+}
+
+function Sheet({
+  sectionId,
+  sections,
+  onPick,
+}: {
+  sectionId: string
+  sections: { id: string; label: string }[]
+  onPick: (id: string) => void
+}) {
+  const query = useGradebook(sectionId)
+  const save = useSaveGrades(sectionId)
   const [edits, setEdits] = useState<Edits>({})
-  const [saved, setSaved] = useState(false)
 
-  const set = (id: string, field: string, value: string) => {
-    setSaved(false)
-    setEdits((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }))
-  }
-
-  const valueOf = (row: GradeRow, field: 'midterm' | 'assignment' | 'final') =>
-    edits[row.id]?.[field] ?? (row[field] === null ? '' : String(row[field]))
+  /** Per-cell reasons from the last save. Cleared when that cell is edited. */
+  const rejected = Object.fromEntries(
+    (save.data?.rejected ?? []).map((r) => [cellKey(r.studentId, r.columnId), r.reason]),
+  )
 
   return (
     <QueryState query={query}>
       {(d) => {
-        const pending = Object.values(edits).reduce((n, f) => n + Object.keys(f).length, 0)
+        const pending = Object.keys(edits).length
+
+        function submit() {
+          const entries = Object.entries(edits).map(([key, raw]) => {
+            const [studentId, columnId] = key.split(':')
+            return {
+              studentId: studentId!,
+              columnId: columnId!,
+              // An emptied cell is a deliberate clear, not a zero.
+              points: raw.trim() === '' ? null : Number(raw),
+            }
+          })
+          save.mutate(
+            { entries },
+            {
+              onSuccess: (result) => {
+                // Keep only the cells the server refused, so the teacher can
+                // fix them without retyping the ones that landed.
+                const keep = new Set(result.rejected.map((r) => cellKey(r.studentId, r.columnId)))
+                setEdits((prev) =>
+                  Object.fromEntries(Object.entries(prev).filter(([k]) => keep.has(k))),
+                )
+              },
+            },
+          )
+        }
 
         return (
           <div className="flex flex-col gap-6">
             <PageHeader
               title="Grade Book"
-              subtitle="Enter and publish marks for your students."
+              subtitle={`${d.section.course.code} Sec ${d.section.name} • ${d.remainingEntries} cells still empty`}
               action={
                 <Button
-                  disabled={pending === 0}
-                  onClick={() => {
-                    setEdits({})
-                    setSaved(true)
-                  }}
+                  disabled={pending === 0 || save.isPending}
+                  onClick={submit}
                   className="h-11 text-body"
                 >
-                  {saved ? 'Saved' : `Save ${pending || ''} changes`.trim()}
+                  {save.isPending ? 'Saving…' : `Save ${pending || ''} change${pending === 1 ? '' : 's'}`}
                 </Button>
               }
             />
 
-            <Card>
-              <CardHeader title="Filters" />
-              <CardBody className="grid gap-4 sm:grid-cols-2">
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-link text-fg-heading">Select Course</span>
-                  <Select defaultValue={d.courses[0]}>
-                    <SelectTrigger className="h-10" aria-label="Select Course">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {d.courses.map((c) => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-link text-fg-heading">Assessment Type</span>
-                  <Select defaultValue={d.assessments[0]}>
-                    <SelectTrigger className="h-10" aria-label="Assessment Type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {d.assessments.map((a) => (
-                        <SelectItem key={a} value={a}>{a}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-              </CardBody>
-            </Card>
+            <Select value={sectionId} onValueChange={onPick}>
+              <SelectTrigger className="h-10 w-[260px]" aria-label="Section">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {sections.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {save.isSuccess && (
+              <p
+                role="status"
+                className={save.data.rejected.length > 0 ? 'text-warning' : 'text-success'}
+              >
+                {save.data.saved} saved
+                {save.data.rejected.length > 0 &&
+                  ` • ${save.data.rejected.length} rejected — see the highlighted cells`}
+              </p>
+            )}
 
             <Card>
               <CardHeader title="Marks" />
-              <div className="w-full overflow-x-auto">
+              <CardBody className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-surface-subtle hover:bg-surface-subtle">
-                      {['Student', 'ID', 'Midterm /30', 'Assignment /20', 'Final /50'].map((h) => (
-                        <TableHead key={h} className="h-auto px-6 py-3 text-eyebrow uppercase text-fg-muted">
-                          {h}
+                    <TableRow>
+                      <TableHead>Student</TableHead>
+                      <TableHead>ID</TableHead>
+                      {d.columns.map((c) => (
+                        <TableHead key={c.id}>
+                          {c.label}
+                          <span className="ml-1 text-fg-muted">
+                            /{c.maxPoints} · {c.weightPercent}%
+                          </span>
                         </TableHead>
                       ))}
+                      <TableHead>Total</TableHead>
+                      <TableHead>Grade</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {d.rows.map((r) => (
-                      <TableRow key={r.id} className="border-border">
-                        <TableCell className="px-6 py-3 text-body text-fg-heading">{r.name}</TableCell>
-                        <TableCell className="px-6 py-3 text-body text-fg-body">{r.id}</TableCell>
-                        {(['midterm', 'assignment', 'final'] as const).map((field) => (
-                          <TableCell key={field} className="px-6 py-3">
-                            <Input
-                              type="number"
-                              min={0}
-                              value={valueOf(r, field)}
-                              onChange={(e) => set(r.id, field, e.target.value)}
-                              className="h-9 w-24"
-                              aria-label={`${r.name} ${field}`}
-                            />
-                          </TableCell>
-                        ))}
+                    {d.rows.map((row) => (
+                      <TableRow key={row.student.id}>
+                        <TableCell className="text-fg-heading">{row.student.fullName}</TableCell>
+                        <TableCell>{row.student.registrationNo}</TableCell>
+
+                        {d.columns.map((col) => {
+                          const key = cellKey(row.student.id, col.id)
+                          const reason = rejected[key]
+                          const stored = row.scores[col.id]
+                          return (
+                            <TableCell key={col.id}>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={col.maxPoints}
+                                // A published column locks: visible, not hidden,
+                                // so it never reads as data loss.
+                                disabled={!col.editable}
+                                aria-label={`${col.label} for ${row.student.fullName}`}
+                                aria-invalid={reason !== undefined}
+                                value={edits[key] ?? (stored === null ? '' : String(stored))}
+                                onChange={(e) =>
+                                  setEdits((prev) => ({ ...prev, [key]: e.target.value }))
+                                }
+                                className={cn(
+                                  'h-9 w-20',
+                                  reason && 'border-danger',
+                                  edits[key] !== undefined && !reason && 'border-brand-600',
+                                )}
+                              />
+                              {reason && (
+                                <span role="alert" className="mt-1 block text-danger">
+                                  {reason}
+                                </span>
+                              )}
+                            </TableCell>
+                          )
+                        })}
+
+                        {/* Null until every column is in — a partial sum reads
+                            like a fail to a student who has not sat the final. */}
+                        <TableCell className="text-link text-fg-heading">
+                          {row.total ?? '—'}
+                        </TableCell>
+                        <TableCell className="text-link text-brand-700">
+                          {row.grade ?? '—'}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              </div>
-              <CardBody className="border-t border-border text-center">
-                <Button variant="outline">Load {d.remaining} more students</Button>
               </CardBody>
             </Card>
           </div>

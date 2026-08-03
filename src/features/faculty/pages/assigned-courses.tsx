@@ -1,12 +1,13 @@
+import { Link } from 'react-router'
 import { Card, CardBody } from '@/components/patterns/card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { ProgressBar } from '@/components/patterns/progress-bar'
 import { QueryState } from '@/components/states'
-import { useAssignedCourses } from '../api'
+import { useAssignedSections } from '../api'
 
 /** Faculty My Assigned Courses — Figma 1:433. */
 export function AssignedCourses() {
-  const query = useAssignedCourses()
+  const query = useAssignedSections()
 
   return (
     <QueryState query={query}>
@@ -15,13 +16,26 @@ export function AssignedCourses() {
           <PageHeader title="My Assigned Courses" subtitle="Everything you teach this semester." />
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {d.courses.map((c) => (
-              <Card key={c.code}>
+            {d.sections.map((s) => (
+              <Card key={s.id}>
                 <CardBody>
-                  <p className="text-link text-fg-heading">{c.name}</p>
-                  <p className="text-fg-muted">{c.code} • {c.section} • {c.students} students</p>
-                  <ProgressBar value={c.progress} label={`${c.name} syllabus progress`} className="mt-4" />
-                  <p className="mt-2 text-fg-muted">{c.progress}% of syllabus covered</p>
+                  <Link
+                    to={`/faculty/courses?section=${s.id}`}
+                    className="text-link text-fg-heading hover:underline"
+                  >
+                    {s.course.title}
+                  </Link>
+                  <p className="text-fg-muted">
+                    {s.course.code} • Sec {s.name} • {s.enrolledCount} students
+                  </p>
+                  <ProgressBar
+                    value={s.syllabusProgress}
+                    label={`${s.course.title} syllabus progress`}
+                    className="mt-4"
+                  />
+                  <p className="mt-2 text-fg-muted">
+                    {s.chaptersDone} of {s.chaptersTotal} chapters covered
+                  </p>
                 </CardBody>
               </Card>
             ))}

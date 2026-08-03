@@ -4,8 +4,11 @@ import { MetricCard } from '@/components/patterns/metric-card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { QueryState } from '@/components/states'
 import { useGrants } from '../api'
+import { date, money, percent } from '@/lib/format'
+import { ProgressBar } from '@/components/patterns/progress-bar'
+import type { ProjectState } from '@/types/faculty'
 
-const TONE: Record<string, BadgeTone> = {
+const TONE: Record<ProjectState, BadgeTone> = {
   ACTIVE: 'success',
   REVIEW: 'warning',
   CLOSED: 'neutral',
@@ -31,15 +34,33 @@ export function Grants() {
             <Card>
               <CardHeader title="Projects" />
               <CardBody className="flex flex-col gap-3">
-                {d.projects.map((p) => (
-                  <div
-                    key={p.title}
-                    className="flex items-start justify-between gap-3 rounded-control border border-border-strong bg-surface p-4"
-                  >
-                    <p className="min-w-0 text-link text-fg-heading">{p.title}</p>
-                    <Badge tone={TONE[p.state]}>{p.state}</Badge>
-                  </div>
-                ))}
+                {d.projects.map((p) => {
+                  const spentPct = (Number(p.spent) / Number(p.awarded)) * 100
+                  return (
+                    <div
+                      key={p.id}
+                      className="rounded-control border border-border-strong bg-surface p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="min-w-0 text-link text-fg-heading">{p.title}</p>
+                        <Badge tone={TONE[p.state]}>{p.state}</Badge>
+                      </div>
+                      <p className="mt-1 text-fg-muted">
+                        {p.fundingBody} • {date(p.startsOn)} – {date(p.endsOn)}
+                      </p>
+                      <ProgressBar
+                        value={spentPct}
+                        tone={spentPct > 90 ? 'warning' : 'brand'}
+                        label={`${p.title} budget used`}
+                        className="mt-3"
+                      />
+                      <p className="mt-2 text-fg-muted">
+                        {money(p.spent)} of {money(p.awarded)} used ({percent(spentPct)}) •{' '}
+                        {p.assistantCount} RA{p.assistantCount === 1 ? '' : 's'}
+                      </p>
+                    </div>
+                  )
+                })}
               </CardBody>
             </Card>
 
@@ -47,9 +68,11 @@ export function Grants() {
               <CardHeader title="Publications" />
               <CardBody className="flex flex-col gap-3">
                 {d.publications.map((p) => (
-                  <div key={p.title} className="border-l-2 border-nav-active-student pl-3">
+                  <div key={p.id} className="border-l-2 border-nav-active-student pl-3">
                     <p className="text-link text-fg-heading">{p.title}</p>
-                    <p className="text-fg-muted">{p.cite}</p>
+                    <p className="text-fg-muted">
+                      {p.venue}, {p.year} • {p.citationCount} citations
+                    </p>
                   </div>
                 ))}
               </CardBody>
