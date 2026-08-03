@@ -32,13 +32,15 @@ export function ExamAnalytics() {
             </Card>
 
             <aside className="flex flex-col gap-6">
-              <div className="rounded-card border border-warning/20 bg-warning/5 p-4">
-                <p className="mb-1 flex items-center gap-2 text-link text-warning">
-                  <AlertTriangle className="size-4" aria-hidden />
-                  {d.weakest.title}
-                </p>
-                <p className="text-fg-body">{d.weakest.note}</p>
-              </div>
+              {d.weakest && (
+                <div className="rounded-card border border-warning/20 bg-warning/5 p-4">
+                  <p className="mb-1 flex items-center gap-2 text-link text-warning">
+                    <AlertTriangle className="size-4" aria-hidden />
+                    {d.weakest.title}
+                  </p>
+                  <p className="text-fg-body">{d.weakest.note}</p>
+                </div>
+              )}
 
               <Card>
                 <CardHeader title="Recommendations" icon={Lightbulb} />

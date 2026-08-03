@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/patterns/page-header'
 import { ProgressBar } from '@/components/patterns/progress-bar'
 import { QueryState } from '@/components/states'
 import { useCreditProgress } from '../api'
+import { gpa } from '@/lib/format'
 
 /** Credit Progress — Figma 6:8940. */
 export function CreditProgress() {
@@ -62,12 +63,12 @@ export function CreditProgress() {
               <CardHeader title="Credits by Term" />
               <DataTable
                 rows={d.perTerm}
-                getRowKey={(r) => r.term}
+                getRowKey={(r) => r.termId}
                 empty={{ title: 'No completed terms yet' }}
                 columns={[
-                  { key: 'term', header: 'Term', cell: (r) => <span className="text-fg-heading">{r.term}</span> },
+                  { key: 'term', header: 'Term', cell: (r) => <span className="text-fg-heading">{r.termName}</span> },
                   { key: 'credits', header: 'Credits', cell: (r) => r.credits },
-                  { key: 'gpa', header: 'GPA', cell: (r) => r.gpa },
+                  { key: 'gpa', header: 'GPA', cell: (r) => gpa(r.gpa) },
                 ]}
               />
             </Card>

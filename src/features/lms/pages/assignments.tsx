@@ -1,17 +1,28 @@
 import { Link } from 'react-router'
-import { AssistantPanel } from '@/components/patterns/assistant-panel'
+import { ConnectedAssistant } from '@/components/patterns/assistant-panel'
 import { Badge, type BadgeTone } from '@/components/patterns/badge'
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { MetricCard } from '@/components/patterns/metric-card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { QueryState } from '@/components/states'
-import { useAssignments, type AssignmentState } from '../api'
+import { useAssignments } from '../api'
+import { relative } from '@/lib/format'
+import type { AssignmentState } from '@/types'
 
 const TONE: Record<AssignmentState, BadgeTone> = {
+  OPEN: 'neutral',
   OVERDUE: 'danger',
-  'DUE SOON': 'warning',
+  DUE_SOON: 'warning',
   SUBMITTED: 'info',
   GRADED: 'success',
+}
+
+const LABEL: Record<AssignmentState, string> = {
+  OPEN: 'OPEN',
+  OVERDUE: 'OVERDUE',
+  DUE_SOON: 'DUE SOON',
+  SUBMITTED: 'SUBMITTED',
+  GRADED: 'GRADED',
 }
 
 /** LMS Assignments — Figma 6:2928. */
@@ -39,14 +50,19 @@ export function Assignments() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-link text-fg-heading">{a.title}</p>
-                        <p className="text-fg-muted">{a.course} • {a.summary}</p>
+                        <p className="text-fg-muted">
+                          {a.course.code} • {a.summary}
+                        </p>
                       </div>
-                      <Badge tone={TONE[a.state]}>{a.state}</Badge>
+                      <Badge tone={TONE[a.state]}>{LABEL[a.state]}</Badge>
                     </div>
 
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-fg-muted">Due {a.due} • {a.meta}</p>
-                      {(a.state === 'OVERDUE' || a.state === 'DUE SOON') && (
+                      <p className="text-fg-muted">
+                        Due {relative(a.dueAt)}
+                        {a.grade && ` • Graded ${a.grade}`}
+                      </p>
+                      {(a.state === 'OVERDUE' || a.state === 'DUE_SOON' || a.state === 'OPEN') && (
                         <Link
                           to={`/student/lms/assignments/${a.id}/submit`}
                           className="text-link text-brand-700 hover:underline"
@@ -60,7 +76,7 @@ export function Assignments() {
               </CardBody>
             </Card>
 
-            <AssistantPanel {...d.assistant} />
+            <ConnectedAssistant context="lms.assignments" />
           </div>
         </div>
       )}

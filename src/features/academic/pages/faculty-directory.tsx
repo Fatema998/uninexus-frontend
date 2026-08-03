@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Mail, MapPin, Search } from 'lucide-react'
-import { AssistantPanel } from '@/components/patterns/assistant-panel'
+import { ConnectedAssistant } from '@/components/patterns/assistant-panel'
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { EmptyState, QueryState } from '@/components/states'
@@ -19,21 +19,14 @@ const initials = (name: string) =>
 
 /** Faculty Directory — Figma 6:7770 (2-column grid). */
 export function FacultyDirectory() {
-  const query = useFacultyDirectory()
   const [q, setQ] = useState('')
+  // Filtering is the server's — the directory is paginated and can outgrow a page.
+  const query = useFacultyDirectory(q.trim())
 
   return (
     <QueryState query={query}>
       {(d) => {
-        const term = q.trim().toLowerCase()
-        const shown = term
-          ? d.faculty.filter(
-              (f) =>
-                f.name.toLowerCase().includes(term) ||
-                f.title.toLowerCase().includes(term) ||
-                f.room.toLowerCase().includes(term),
-            )
-          : d.faculty
+        const shown = d.results
 
         return (
           <div className="flex flex-col gap-6">
@@ -63,7 +56,7 @@ export function FacultyDirectory() {
                     <div className="grid gap-4 md:grid-cols-2">
                       {shown.map((f) => (
                         <article
-                          key={f.email}
+                          key={f.id}
                           className="flex gap-3 rounded-control border border-border-strong bg-surface p-4"
                         >
                           <Avatar className="size-12 shrink-0">
@@ -73,18 +66,23 @@ export function FacultyDirectory() {
                           </Avatar>
                           <div className="min-w-0">
                             <p className="truncate text-link text-fg-heading">{f.name}</p>
-                            <p className="truncate text-fg-muted">{f.title}</p>
-                            <p className="mt-1 flex items-center gap-1.5 text-fg-muted">
-                              <MapPin className="size-3.5 shrink-0" aria-hidden />
-                              {f.room}
-                            </p>
-                            <a
-                              href={`mailto:${f.email}`}
-                              className="mt-0.5 flex items-center gap-1.5 truncate text-link text-brand-700 hover:underline"
-                            >
-                              <Mail className="size-3.5 shrink-0" aria-hidden />
-                              {f.email}
-                            </a>
+                            <p className="truncate text-fg-muted">{f.title ?? f.department}</p>
+                            {f.officeRoom && (
+                              <p className="mt-1 flex items-center gap-1.5 text-fg-muted">
+                                <MapPin className="size-3.5 shrink-0" aria-hidden />
+                                {f.officeRoom}
+                                {f.officeHours && ` • ${f.officeHours}`}
+                              </p>
+                            )}
+                            {f.email && (
+                              <a
+                                href={`mailto:${f.email}`}
+                                className="mt-0.5 flex items-center gap-1.5 truncate text-link text-brand-700 hover:underline"
+                              >
+                                <Mail className="size-3.5 shrink-0" aria-hidden />
+                                {f.email}
+                              </a>
+                            )}
                           </div>
                         </article>
                       ))}
@@ -93,7 +91,7 @@ export function FacultyDirectory() {
                 </CardBody>
               </Card>
 
-              <AssistantPanel {...d.assistant} />
+              <ConnectedAssistant context="academic.faculty" />
             </div>
           </div>
         )

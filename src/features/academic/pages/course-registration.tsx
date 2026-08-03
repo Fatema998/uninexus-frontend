@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { AlertTriangle, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Badge, type BadgeTone } from '@/components/patterns/badge'
+import { Badge } from '@/components/patterns/badge'
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { Button } from '@/components/ui/button'
 import { EmptyState, QueryState } from '@/components/states'
-import { useCourseRegistration, type OfferedCourse } from '../api'
+import { ApiError } from '@/hooks/use-api'
+import { useAddCourse, useCourseOfferings, useRemoveCourse } from '../api'
 import { Input } from '@/components/ui/input'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -16,40 +16,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import type { ApiErrorBody } from '@/types'
 
-const NOTE_TONE: Record<OfferedCourse['noteTone'], BadgeTone> = {
-  neutral: 'neutral',
-  brand: 'brand',
-  warning: 'warning',
-}
+const DEPARTMENTS = [
+  'All Departments',
+  'Computer Science',
+  'Mathematics',
+  'General Education',
+  'Business Administration',
+]
 
 const MAX_CREDITS = 18
 
-/** Course Registration — Figma 6:10774. */
+/**
+ * Course Registration — Figma 6:10774.
+ *
+ * Adding is a server round trip, not an optimistic patch: seats are
+ * contended and a 409 is a normal outcome (docs/api/student.md §5.2).
+ */
 export function CourseRegistration() {
-  const query = useCourseRegistration()
   const [dept, setDept] = useState('All Departments')
   const [q, setQ] = useState('')
-  const [picked, setPicked] = useState<string[]>([])
+  const query = useCourseOfferings(q.trim(), dept)
+
+  const add = useAddCourse()
+  const remove = useRemoveCourse()
+  const busy = add.isPending || remove.isPending
+
+  const conflict = add.error instanceof ApiError ? (add.error.body as ApiErrorBody) : null
 
   return (
     <QueryState query={query}>
       {(d) => {
-        const term = q.trim().toLowerCase()
-        const shown = d.courses.filter(
-          (c) =>
-            (dept === 'All Departments' || c.dept === dept) &&
-            (!term || c.name.toLowerCase().includes(term) || c.code.toLowerCase().includes(term)),
-        )
-
-        const chosen = d.courses.filter((c) => picked.includes(c.code))
-        const credits = chosen.reduce((sum, c) => sum + c.credits, 0)
+        // `canRegister === false` with "Already added." is the server telling
+        // us it is in the cart — there is no second source of truth here.
+        const chosen = d.results.filter((c) => c.blockedReason === 'Already added.')
+        const credits = chosen.reduce((sum, c) => sum + c.course.credits, 0)
         const overLimit = credits > MAX_CREDITS
-
-        const toggle = (code: string) =>
-          setPicked((prev) =>
-            prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
-          )
 
         return (
           <div className="flex flex-col gap-6">
@@ -64,12 +67,15 @@ export function CourseRegistration() {
                 <CardBody className="flex flex-col gap-4">
                   <div className="flex flex-wrap gap-3">
                     <label className="relative flex flex-1 items-center">
-                      <Search className="pointer-events-none absolute left-3 size-4.5 text-fg-muted" aria-hidden />
+                      <Search
+                        className="pointer-events-none absolute left-3 size-4.5 text-fg-muted"
+                        aria-hidden
+                      />
                       <span className="sr-only">Search courses</span>
                       <Input
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
-                        placeholder="Search by course code or title (e.g., CS301)…"
+                        placeholder="Search by course code or title (e.g., CS-301)…"
                         className="h-10 pl-10"
                       />
                     </label>
@@ -79,7 +85,7 @@ export function CourseRegistration() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {d.departments.map((x) => (
+                        {DEPARTMENTS.map((x) => (
                           <SelectItem key={x} value={x}>
                             {x}
                           </SelectItem>
@@ -88,39 +94,65 @@ export function CourseRegistration() {
                     </Select>
                   </div>
 
-                  {shown.length === 0 ? (
+                  {conflict && (
+                    <p role="alert" className="text-danger">
+                      {conflict.detail ?? 'That course could not be added.'}
+                    </p>
+                  )}
+
+                  {d.results.length === 0 ? (
                     <EmptyState
                       title="No courses match"
                       description="Try a different department or search term."
                     />
                   ) : (
-                    shown.map((c) => {
-                      const isPicked = picked.includes(c.code)
+                    d.results.map((c) => {
+                      const isPicked = c.blockedReason === 'Already added.'
                       return (
-                        <label
-                          key={c.code}
+                        <div
+                          key={c.id}
                           className={cn(
-                            'flex cursor-pointer items-start gap-3 rounded-control border p-4 transition-colors',
+                            'flex items-start gap-3 rounded-control border p-4 transition-colors',
                             isPicked
                               ? 'border-brand-600 bg-brand-600/5'
-                              : 'border-border-strong bg-surface hover:bg-surface-subtle',
+                              : 'border-border-strong bg-surface',
                           )}
                         >
-                          <Checkbox
-                            checked={isPicked}
-                            onCheckedChange={() => toggle(c.code)}
-                            className="mt-1"
-                          />
                           <div className="min-w-0 flex-1">
-                            <p className="text-link text-fg-heading">{c.name}</p>
+                            <p className="text-link text-fg-heading">{c.course.title}</p>
                             <p className="text-fg-muted">
-                              {c.code} • {c.credits} credits • {c.seats} seats
+                              {c.course.code} • {c.course.credits} credits • {c.seatsTaken} /{' '}
+                              {c.seatsTotal} seats • {c.instructorName}
                             </p>
-                            <Badge tone={NOTE_TONE[c.noteTone]} className="mt-2">
-                              {c.note}
-                            </Badge>
+                            {c.notice && (
+                              <Badge tone={c.notice.tone} className="mt-2">
+                                {c.notice.text}
+                              </Badge>
+                            )}
                           </div>
-                        </label>
+
+                          {isPicked ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={busy}
+                              onClick={() => remove.mutate(c.id)}
+                            >
+                              Remove
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              disabled={busy || !c.canRegister || overLimit}
+                              // The reason is shown, not hidden — a missing
+                              // row reads as a bug.
+                              title={c.blockedReason ?? undefined}
+                              onClick={() => add.mutate({ offeringId: c.id })}
+                            >
+                              Add
+                            </Button>
+                          )}
+                        </div>
                       )
                     })
                   )}
@@ -135,16 +167,18 @@ export function CourseRegistration() {
                       <p className="text-fg-muted">No courses selected yet.</p>
                     ) : (
                       chosen.map((c) => (
-                        <div key={c.code} className="flex items-baseline justify-between gap-3">
-                          <span className="min-w-0 truncate text-fg-body">{c.name}</span>
-                          <span className="shrink-0 text-fg-muted">{c.credits} cr</span>
+                        <div key={c.id} className="flex items-baseline justify-between gap-3">
+                          <span className="min-w-0 truncate text-fg-body">{c.course.title}</span>
+                          <span className="shrink-0 text-fg-muted">{c.course.credits} cr</span>
                         </div>
                       ))
                     )}
 
                     <div className="mt-2 flex items-baseline justify-between border-t border-border pt-3">
                       <span className="text-eyebrow uppercase text-fg-muted">Total credits</span>
-                      <span className={cn('text-link', overLimit ? 'text-danger' : 'text-fg-heading')}>
+                      <span
+                        className={cn('text-link', overLimit ? 'text-danger' : 'text-fg-heading')}
+                      >
                         {credits} / {MAX_CREDITS}
                       </span>
                     </div>
@@ -156,7 +190,10 @@ export function CourseRegistration() {
                       </p>
                     )}
 
-                    <Button disabled={chosen.length === 0 || overLimit} className="mt-2 h-11 w-full text-body">
+                    <Button
+                      disabled={chosen.length === 0 || overLimit}
+                      className="mt-2 h-11 w-full text-body"
+                    >
                       Register {chosen.length > 0 && `(${chosen.length})`}
                     </Button>
                   </CardBody>

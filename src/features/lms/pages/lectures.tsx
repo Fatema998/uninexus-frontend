@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/patterns/page-header'
 import { ProgressBar } from '@/components/patterns/progress-bar'
 import { QueryState } from '@/components/states'
 import { useLectures } from '../api'
+import { duration } from '@/lib/format'
 
 /** LMS Video Lectures — Figma 6:1451. */
 export function Lectures() {
@@ -22,7 +23,7 @@ export function Lectures() {
             <PageHeader title="Video Lectures" subtitle={id} />
 
             <Card>
-              <CardHeader title={d.module} />
+              <CardHeader title={d.moduleTitle} />
               <CardBody>
                 <p className="text-fg-body">{d.summary}</p>
                 <ProgressBar value={pct} label="Lectures watched" className="mt-4" />
@@ -37,7 +38,7 @@ export function Lectures() {
               <CardBody className="flex flex-col gap-3">
                 {d.lectures.map((l) => (
                   <div
-                    key={l.title}
+                    key={l.id}
                     className="flex items-center gap-4 rounded-control border border-border-strong bg-surface p-4"
                   >
                     <span className="grid size-10 shrink-0 place-items-center rounded-control bg-brand-600/10 text-brand-700">
@@ -49,7 +50,11 @@ export function Lectures() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-link text-fg-heading">{l.title}</p>
-                      <p className="text-fg-muted">{l.duration}</p>
+                      <p className="text-fg-muted">
+                        {duration(l.durationSeconds, 'clock')}
+                        {!l.watched && l.positionSeconds > 0 &&
+                          ` • resumes at ${duration(l.positionSeconds, 'clock')}`}
+                      </p>
                     </div>
                     {l.watched && <span className="text-fg-muted">Watched</span>}
                   </div>

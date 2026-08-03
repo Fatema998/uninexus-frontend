@@ -1,71 +1,120 @@
-import { Paperclip, Sparkles } from 'lucide-react'
+import { useState } from 'react'
+import { Paperclip } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Badge } from '@/components/patterns/badge'
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { PageHeader } from '@/components/patterns/page-header'
-import { QueryState } from '@/components/states'
-import { useAnnouncements } from '../api'
+import { EmptyState, QueryState } from '@/components/states'
+import { fileSize, relative } from '@/lib/format'
+import { useAnnouncements, useMarkAnnouncementRead } from '../api'
 
 /** LMS Course Announcements — Figma 6:6849. */
 export function Announcements() {
   const query = useAnnouncements()
+  const markRead = useMarkAnnouncementRead()
+  const [openId, setOpenId] = useState<string | null>(null)
 
   return (
     <QueryState query={query}>
-      {(d) => (
-        <div className="flex flex-col gap-6">
-          <PageHeader title="Course Announcements" subtitle="Updates from your instructors." />
+      {(d) => {
+        // The pinned one leads, as in the design; everything else is "recent".
+        const featured =
+          d.announcements.find((a) => a.id === openId) ??
+          d.announcements.find((a) => a.pinned) ??
+          d.announcements[0] ??
+          null
+        const rest = d.announcements.filter((a) => a.id !== featured?.id)
 
-          <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
-            <div className="flex flex-col gap-6">
+        function open(id: string, read: boolean) {
+          setOpenId(id)
+          // Fire-and-forget: a missed read-receipt is invisible, and a toast
+          // about one is noise. See docs/api/student.md §6.3.
+          if (!read) markRead.mutate(id)
+        }
+
+        return (
+          <div className="flex flex-col gap-6">
+            <PageHeader
+              title="Course Announcements"
+              subtitle={
+                d.unreadCount > 0
+                  ? `${d.unreadCount} unread update${d.unreadCount === 1 ? '' : 's'}.`
+                  : 'You are up to date.'
+              }
+            />
+
+            {featured === null ? (
               <Card>
-                <CardHeader title={d.featured.title} />
-                <CardBody className="flex flex-col gap-4">
-                  <div>
-                    <p className="text-link text-fg-heading">{d.featured.from}</p>
-                    <p className="text-fg-muted">{d.featured.role}</p>
-                  </div>
-
-                  {d.featured.body.map((p) => (
-                    <p key={p} className="text-fg-body">{p}</p>
-                  ))}
-
-                  <a
-                    href="#download"
-                    className="flex items-center gap-3 rounded-control border border-border-strong bg-surface p-3 hover:bg-surface-subtle"
-                  >
-                    <Paperclip className="size-4.5 shrink-0 text-fg-muted" aria-hidden />
-                    <span className="min-w-0">
-                      <span className="block truncate text-link text-brand-700">
-                        {d.featured.attachment.name}
-                      </span>
-                      <span className="block text-fg-muted">{d.featured.attachment.meta}</span>
-                    </span>
-                  </a>
+                <CardBody>
+                  <EmptyState title="No announcements" />
                 </CardBody>
               </Card>
-
-              <Card>
-                <CardHeader title="Recent Updates" />
-                <CardBody className="flex flex-col gap-4">
-                  {d.recent.map((r) => (
-                    <div key={r.title} className="border-l-2 border-nav-active-student pl-3">
-                      <p className="text-link text-fg-heading">{r.title}</p>
-                      <p className="text-fg-muted">{r.body}</p>
+            ) : (
+              <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
+                <Card>
+                  <CardHeader title={featured.title}>
+                    {!featured.read && <Badge tone="brand">NEW</Badge>}
+                  </CardHeader>
+                  <CardBody className="flex flex-col gap-4">
+                    <div>
+                      <p className="text-link text-fg-heading">{featured.authorName}</p>
+                      <p className="text-fg-muted">
+                        {featured.authorRole}
+                        {featured.course && ` • ${featured.course.code}`} •{' '}
+                        {relative(featured.publishedAt)}
+                      </p>
                     </div>
-                  ))}
-                </CardBody>
-              </Card>
-            </div>
 
-            <div className="rounded-card border border-accent-600/20 bg-accent-600/5 p-4">
-              <p className="mb-1 flex items-center gap-2 text-link text-accent-600">
-                <Sparkles className="size-4" aria-hidden />
-                Smart Summary
-              </p>
-              <p className="text-fg-body">{d.summary}</p>
-            </div>
+                    <p className="whitespace-pre-wrap text-fg-body">{featured.body}</p>
+
+                    {featured.attachments.map((att) => (
+                      <a
+                        key={att.id}
+                        href={att.url}
+                        download
+                        className="flex items-center gap-3 rounded-control border border-border-strong bg-surface p-3 hover:bg-surface-subtle"
+                      >
+                        <Paperclip className="size-4.5 shrink-0 text-fg-muted" aria-hidden />
+                        <span className="min-w-0">
+                          <span className="block truncate text-link text-brand-700">
+                            {att.filename}
+                          </span>
+                          <span className="block text-fg-muted">
+                            {fileSize(att.sizeBytes)} • uploaded {relative(att.uploadedAt)}
+                          </span>
+                        </span>
+                      </a>
+                    ))}
+                  </CardBody>
+                </Card>
+
+                <Card>
+                  <CardHeader title="Recent Updates" />
+                  <CardBody className="flex flex-col gap-3">
+                    {rest.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => open(a.id, a.read)}
+                        className={cn(
+                          'border-l-2 pl-3 text-left',
+                          a.read ? 'border-border' : 'border-nav-active-student',
+                        )}
+                      >
+                        <p className="text-link text-fg-heading">
+                          {a.title}
+                          {!a.read && <span className="ml-2 text-brand-700">•</span>}
+                        </p>
+                        <p className="line-clamp-2 text-fg-muted">{a.body}</p>
+                      </button>
+                    ))}
+                  </CardBody>
+                </Card>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )
+      }}
     </QueryState>
   )
 }

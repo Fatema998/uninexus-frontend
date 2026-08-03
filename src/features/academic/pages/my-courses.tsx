@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Search } from 'lucide-react'
-import { AssistantPanel } from '@/components/patterns/assistant-panel'
+import { ConnectedAssistant } from '@/components/patterns/assistant-panel'
 import { Badge } from '@/components/patterns/badge'
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { MetricCard } from '@/components/patterns/metric-card'
@@ -21,7 +21,9 @@ export function MyCourses() {
         const term = filter.trim().toLowerCase()
         const shown = term
           ? d.courses.filter(
-              (c) => c.name.toLowerCase().includes(term) || c.code.toLowerCase().includes(term),
+              (c) =>
+                c.course.title.toLowerCase().includes(term) ||
+                c.course.code.toLowerCase().includes(term),
             )
           : d.courses
 
@@ -58,14 +60,14 @@ export function MyCourses() {
                   ) : (
                     shown.map((c) => (
                       <article
-                        key={c.code}
+                        key={c.course.id}
                         className="rounded-control border border-border-strong bg-surface p-4"
                       >
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="text-link text-fg-heading">{c.name}</p>
+                            <p className="text-link text-fg-heading">{c.course.title}</p>
                             <p className="text-fg-muted">
-                              {c.code} • {c.teacher} • {c.credits} credits
+                              {c.course.code} • {c.instructorName} • {c.course.credits} credits
                             </p>
                           </div>
                           <div className="text-right">
@@ -74,17 +76,17 @@ export function MyCourses() {
                             </Badge>
                             <p
                               className={
-                                c.grade === 'N/A' ? 'mt-1 text-fg-muted' : 'mt-1 text-link text-fg-heading'
+                                c.grade ? 'mt-1 text-link text-fg-heading' : 'mt-1 text-fg-muted'
                               }
                             >
-                              Grade: {c.grade}
+                              Grade: {c.grade ?? 'N/A'}
                             </p>
                           </div>
                         </div>
                         <ProgressBar
                           value={c.progress}
                           tone={c.status === 'PENDING' ? 'warning' : 'brand'}
-                          label={`${c.name} progress`}
+                          label={`${c.course.title} progress`}
                           className="mt-3"
                         />
                       </article>
@@ -93,7 +95,7 @@ export function MyCourses() {
                 </CardBody>
               </Card>
 
-              <AssistantPanel {...d.assistant} />
+              <ConnectedAssistant context="academic.courses" />
             </div>
           </div>
         )

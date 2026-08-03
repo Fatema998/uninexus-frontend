@@ -1,10 +1,11 @@
 import { Users } from 'lucide-react'
-import { AssistantPanel } from '@/components/patterns/assistant-panel'
+import { ConnectedAssistant } from '@/components/patterns/assistant-panel'
 import { Badge } from '@/components/patterns/badge'
 import { Card, CardBody } from '@/components/patterns/card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { QueryState } from '@/components/states'
 import { useClassrooms } from '../api'
+import { relative } from '@/lib/format'
 
 /** Classroom Information — Figma 6:8199. */
 export function Classrooms() {
@@ -19,15 +20,18 @@ export function Classrooms() {
           <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
             <div className="grid gap-4 md:grid-cols-2">
               {d.rooms.map((r) => (
-                <Card key={r.name}>
+                <Card key={r.id}>
                   <CardBody>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-link text-fg-heading">{r.name}</p>
-                        <p className="text-fg-muted">{r.building}</p>
+                        <p className="text-fg-muted">
+                          {r.building}
+                          {r.floor && ` • ${r.floor}`}
+                        </p>
                       </div>
-                      <Badge tone={r.session ? 'warning' : 'success'}>
-                        {r.session ? 'In Session' : 'Free'}
+                      <Badge tone={r.currentSession ? 'warning' : 'success'}>
+                        {r.currentSession ? 'In Session' : 'Free'}
                       </Badge>
                     </div>
 
@@ -36,11 +40,11 @@ export function Classrooms() {
                       Capacity {r.capacity}
                     </p>
 
-                    {r.session && (
+                    {r.currentSession && (
                       <div className="mt-3 rounded-control bg-surface-subtle p-3">
                         <p className="text-eyebrow uppercase text-fg-muted">Current Session</p>
-                        <p className="text-link text-fg-heading">{r.session.title}</p>
-                        <p className="text-fg-muted">{r.session.endsIn}</p>
+                        <p className="text-link text-fg-heading">{r.currentSession.title}</p>
+                        <p className="text-fg-muted">Ends {relative(r.currentSession.endsAt)}</p>
                       </div>
                     )}
                   </CardBody>
@@ -48,7 +52,7 @@ export function Classrooms() {
               ))}
             </div>
 
-            <AssistantPanel {...d.assistant} />
+            <ConnectedAssistant context="academic.classrooms" />
           </div>
         </div>
       )}

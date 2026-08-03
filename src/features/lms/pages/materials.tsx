@@ -4,9 +4,10 @@ import { Card, CardBody } from '@/components/patterns/card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { QueryState } from '@/components/states'
 import { useMaterials } from '../api'
-import type { MetricTone } from '@/components/patterns/metric-card'
+import { fileSize } from '@/lib/format'
+import type { Tone } from '@/types'
 
-const TILE: Record<MetricTone, string> = {
+const TILE: Record<Tone, string> = {
   brand: 'bg-brand-600/10 text-brand-700',
   accent: 'bg-accent-600/10 text-accent-600',
   info: 'bg-info/10 text-info',
@@ -28,13 +29,15 @@ export function Materials() {
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {d.groups.map((g) => (
-              <Card key={g.label}>
+              <Card key={g.id}>
                 <CardBody>
                   <span className={`grid size-10 place-items-center rounded-control ${TILE[g.tone]}`}>
                     <FolderOpen className="size-4.5" aria-hidden />
                   </span>
                   <p className="mt-4 text-link text-fg-heading">{g.label}</p>
-                  <p className="text-fg-muted">{g.files} Files • {g.size}</p>
+                  <p className="text-fg-muted">
+                    {g.fileCount} Files • {fileSize(g.totalBytes)}
+                  </p>
                 </CardBody>
               </Card>
             ))}

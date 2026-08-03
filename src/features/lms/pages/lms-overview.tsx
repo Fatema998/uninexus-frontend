@@ -27,16 +27,20 @@ export function LmsOverview() {
             <CardBody className="grid gap-4 md:grid-cols-2">
               {d.courses.map((c) => (
                 <Link
-                  key={c.code}
+                  key={c.course.id}
                   to="/student/lms/courses"
                   className="rounded-control border border-border-strong bg-surface p-4 transition-colors hover:bg-surface-subtle"
                 >
                   <div className="flex items-baseline justify-between gap-3">
-                    <p className="min-w-0 truncate text-link text-fg-heading">{c.name}</p>
+                    <p className="min-w-0 truncate text-link text-fg-heading">{c.course.title}</p>
                     {c.grade && <span className="shrink-0 text-link text-brand-700">{c.grade}</span>}
                   </div>
-                  <p className="text-fg-muted">{c.code} • {c.teacher}</p>
-                  <ProgressBar value={c.progress} label={`${c.name} progress`} className="mt-3" />
+                  <p className="text-fg-muted">{c.course.code} • {c.instructorName}</p>
+                  <ProgressBar
+                    value={c.progress}
+                    label={`${c.course.title} progress`}
+                    className="mt-3"
+                  />
                 </Link>
               ))}
             </CardBody>

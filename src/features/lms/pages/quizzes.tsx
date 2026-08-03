@@ -4,9 +4,11 @@ import { Badge, type BadgeTone } from '@/components/patterns/badge'
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { QueryState } from '@/components/states'
-import { useQuizzes, type Quiz } from '../api'
+import { useQuizzes } from '../api'
+import { percent } from '@/lib/format'
+import type { QuizState } from '@/types'
 
-const TONE: Record<Quiz['state'], BadgeTone> = {
+const TONE: Record<QuizState, BadgeTone> = {
   AVAILABLE: 'brand',
   COMPLETED: 'success',
   LOCKED: 'neutral',
@@ -22,13 +24,15 @@ export function Quizzes() {
         <div className="flex flex-col gap-6">
           <PageHeader title="Quizzes" subtitle="Practice and graded quizzes across your courses." />
 
-          <div className="rounded-card border border-accent-600/20 bg-accent-600/5 p-4">
-            <p className="mb-1 flex items-center gap-2 text-link text-accent-600">
-              <Sparkles className="size-4" aria-hidden />
-              {d.revision.title}
-            </p>
-            <p className="text-fg-body">{d.revision.body}</p>
-          </div>
+          {d.revisionPlan && (
+            <div className="rounded-card border border-accent-600/20 bg-accent-600/5 p-4">
+              <p className="mb-1 flex items-center gap-2 text-link text-accent-600">
+                <Sparkles className="size-4" aria-hidden />
+                {d.revisionPlan.title}
+              </p>
+              <p className="text-fg-body">{d.revisionPlan.body}</p>
+            </div>
+          )}
 
           <Card>
             <CardHeader title="All Quizzes" />
@@ -41,9 +45,10 @@ export function Quizzes() {
                   <div className="min-w-0">
                     <p className="text-link text-fg-heading">{q.title}</p>
                     <p className="text-fg-muted">
-                      {q.course} • {q.questions} questions • {q.minutes} min
-                      {q.score && ` • Scored ${q.score}`}
+                      {q.course.code} • {q.questionCount} questions • {q.durationMinutes} min
+                      {q.scorePercent !== null && ` • Scored ${percent(q.scorePercent)}`}
                     </p>
+                    {q.lockedReason && <p className="text-fg-muted">{q.lockedReason}</p>}
                   </div>
                   <div className="flex items-center gap-3">
                     <Badge tone={TONE[q.state]}>{q.state}</Badge>

@@ -13,91 +13,93 @@ export function FeeStatement() {
 
   return (
     <QueryState query={query}>
-      {(d) => {
-        const total = d.lines.reduce((s, l) => s + l.amount, 0)
+      {(d) => (
+        <div className="flex flex-col gap-6">
+          <PageHeader
+            title="Fee Statement"
+            subtitle={`Official statement of charges — ${d.student.termName}.`}
+            action={
+              <Button onClick={() => window.print()} className="h-11 text-body print:hidden">
+                <Printer className="size-4" aria-hidden />
+                Print
+              </Button>
+            }
+          />
 
-        return (
-          <div className="flex flex-col gap-6">
-            <PageHeader
-              title="Fee Statement"
-              subtitle="Official statement of charges."
-              action={
-                <Button onClick={() => window.print()} className="h-11 text-body print:hidden">
-                  <Printer className="size-4" aria-hidden />
-                  Print
-                </Button>
-              }
-            />
-
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card>
-                <CardHeader title="Student Information" />
-                <CardBody>
-                  <dl className="flex flex-col gap-3">
-                    {d.student.map((f) => (
-                      <div key={f.label} className="flex justify-between gap-3">
-                        <dt className="text-fg-muted">{f.label}</dt>
-                        <dd className="text-right text-link text-fg-heading">{f.value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </CardBody>
-              </Card>
-
-              <Card>
-                <CardHeader title="Billing Address" />
-                <CardBody>
-                  <dl className="flex flex-col gap-3">
-                    {d.billing.map((f) => (
-                      <div key={f.label} className="flex justify-between gap-3">
-                        <dt className="text-fg-muted">{f.label}</dt>
-                        <dd className="text-right text-link text-fg-heading">{f.value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </CardBody>
-              </Card>
-            </div>
-
+          <div className="grid gap-6 md:grid-cols-2">
             <Card>
-              <CardHeader title="Statement Summary" />
-              <DataTable
-                rows={[...d.lines, { label: 'Total', amount: total }]}
-                getRowKey={(r) => r.label}
-                empty={{ title: 'No charges on this statement' }}
-                columns={[
-                  {
-                    key: 'label',
-                    header: 'Description',
-                    cell: (r) => <span className="text-fg-heading">{r.label}</span>,
-                  },
-                  {
-                    key: 'amount',
-                    header: 'Amount',
-                    cell: (r) => money(r.amount),
-                    className: 'text-right',
-                  },
-                ]}
-              />
-              <CardBody className="border-t border-border">
-                <div className="flex justify-between gap-3">
-                  <span className="text-fg-muted">Paid to date</span>
-                  <span className="text-link text-success">{money(d.paid)}</span>
-                </div>
-                <div className="mt-1 flex justify-between gap-3">
-                  <span className="text-fg-muted">Outstanding</span>
-                  <span className="text-link text-danger">{money(total - d.paid)}</span>
-                </div>
+              <CardHeader title="Student Information" />
+              <CardBody>
+                <dl className="flex flex-col gap-3">
+                  <Row label="Name" value={d.student.fullName} />
+                  <Row label="ID" value={d.student.registrationNo} />
+                  <Row label="Department" value={d.student.department} />
+                  <Row label="Semester" value={d.student.termName} />
+                </dl>
               </CardBody>
             </Card>
 
-            <p className="text-fg-muted print:hidden">
-              If you find any discrepancies in your statement, please contact the Registrar's
-              Finance Office immediately.
-            </p>
+            <Card>
+              <CardHeader title="Billing Address" />
+              <CardBody>
+                <dl className="flex flex-col gap-3">
+                  <Row label="Address" value={d.billing.addressLines.join(', ')} />
+                  <Row label="City" value={`${d.billing.city} — ${d.billing.postcode}`} />
+                  <Row label="Contact" value={d.billing.phone} />
+                  <Row label="Email" value={d.billing.email} />
+                </dl>
+              </CardBody>
+            </Card>
           </div>
-        )
-      }}
+
+          <Card>
+            <CardHeader title="Statement Summary" />
+            {/* `total` comes from the server — money is never summed client-side. */}
+            <DataTable
+              rows={[...d.lines, { id: 'total', label: 'Total', amount: d.total }]}
+              getRowKey={(r) => r.id}
+              empty={{ title: 'No charges on this statement' }}
+              columns={[
+                {
+                  key: 'label',
+                  header: 'Description',
+                  cell: (r) => <span className="text-fg-heading">{r.label}</span>,
+                },
+                {
+                  key: 'amount',
+                  header: 'Amount',
+                  cell: (r) => money(r.amount),
+                  className: 'text-right',
+                },
+              ]}
+            />
+            <CardBody className="border-t border-border">
+              <div className="flex justify-between gap-3">
+                <span className="text-fg-muted">Paid to date</span>
+                <span className="text-link text-success">{money(d.paid)}</span>
+              </div>
+              <div className="mt-1 flex justify-between gap-3">
+                <span className="text-fg-muted">Outstanding</span>
+                <span className="text-link text-danger">{money(d.balance)}</span>
+              </div>
+            </CardBody>
+          </Card>
+
+          <p className="text-fg-muted print:hidden">
+            If you find any discrepancies in your statement, please contact the Registrar's Finance
+            Office immediately.
+          </p>
+        </div>
+      )}
     </QueryState>
+  )
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-fg-muted">{label}</dt>
+      <dd className="text-right text-link text-fg-heading">{value}</dd>
+    </div>
   )
 }

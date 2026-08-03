@@ -14,33 +14,39 @@ export function LmsMyCourses() {
     <QueryState query={query}>
       {(d) => (
         <div className="flex flex-col gap-6">
-          <PageHeader title="My Courses" subtitle={d.term} />
+          <PageHeader title="My Courses" subtitle={d.termName} />
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {d.courses.map((c) => (
-              <Card key={c.code}>
+              <Card key={c.course.id}>
                 <CardBody>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-link text-fg-heading">{c.name}</p>
-                      <p className="text-fg-muted">{c.code} • {c.teacher}</p>
+                      <p className="truncate text-link text-fg-heading">{c.course.title}</p>
+                      <p className="text-fg-muted">
+                        {c.course.code} • {c.instructorName}
+                      </p>
                     </div>
                     <Badge tone="success">Ongoing</Badge>
                   </div>
 
-                  <ProgressBar value={c.progress} label={`${c.name} progress`} className="mt-4" />
+                  <ProgressBar
+                    value={c.progress}
+                    label={`${c.course.title} progress`}
+                    className="mt-4"
+                  />
                   <p className="mt-2 text-fg-muted">{c.progress}% complete</p>
 
                   <div className="mt-4 flex gap-2">
                     <Link
-                      to={`/student/lms/courses/${c.code}/lectures`}
+                      to={`/student/lms/courses/${c.course.id}/lectures`}
                       className="text-link text-brand-700 hover:underline"
                     >
                       Lectures
                     </Link>
                     <span className="text-fg-muted" aria-hidden>•</span>
                     <Link
-                      to={`/student/lms/courses/${c.code}/materials`}
+                      to={`/student/lms/courses/${c.course.id}/materials`}
                       className="text-link text-brand-700 hover:underline"
                     >
                       Materials

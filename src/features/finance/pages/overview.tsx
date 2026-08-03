@@ -3,7 +3,7 @@ import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { MetricCard } from '@/components/patterns/metric-card'
 import { PageHeader } from '@/components/patterns/page-header'
 import { QueryState } from '@/components/states'
-import { money } from '@/lib/format'
+import { date, money } from '@/lib/format'
 import { useFinanceOverview } from '../api'
 
 /** Finance Overview — Figma 1:9705. */
@@ -14,7 +14,7 @@ export function FinanceOverview() {
     <QueryState query={query}>
       {(d) => (
         <div className="flex flex-col gap-6">
-          <PageHeader title="Finance" subtitle={`Next due date: ${d.nextDue}`} />
+          <PageHeader title="Finance" subtitle={d.nextDueAt ? `Next due date: ${date(d.nextDueAt)}` : 'Nothing outstanding.'} />
 
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {d.metrics.map((m) => (
@@ -26,7 +26,7 @@ export function FinanceOverview() {
             <CardHeader title="Payment Timeline" />
             <CardBody className="flex flex-col gap-4">
               {d.timeline.map((t) => (
-                <div key={t.label} className="flex items-center gap-4">
+                <div key={t.id} className="flex items-center gap-4">
                   {t.paid ? (
                     <CheckCircle2 className="size-4.5 shrink-0 text-success" aria-hidden />
                   ) : (
@@ -34,7 +34,7 @@ export function FinanceOverview() {
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-link text-fg-heading">{t.label}</p>
-                    <p className="text-fg-muted">{t.date}</p>
+                    <p className="text-fg-muted">{date(t.dueOn)}</p>
                   </div>
                   <span className={t.paid ? 'text-fg-muted' : 'text-link text-fg-heading'}>
                     {money(t.amount)}

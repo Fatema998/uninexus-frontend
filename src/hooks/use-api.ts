@@ -59,10 +59,14 @@ function refreshAccessToken(): Promise<string | null> {
 }
 
 function buildInit(init: RequestInit | undefined, token: string | null): RequestInit {
+  // FormData must set its own Content-Type — the browser adds the multipart
+  // boundary, and overriding it makes the body unparseable server-side.
+  const isMultipart = init?.body instanceof FormData
+
   return {
     ...init,
     headers: {
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.body && !isMultipart ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
@@ -125,7 +129,13 @@ function useApiMutation<TData, TVars>(
     mutationFn: (vars: TVars) =>
       apiFetch<TData>(typeof endpoint === 'function' ? endpoint(vars) : endpoint, {
         method,
-        body: method === 'DELETE' ? undefined : JSON.stringify(vars),
+        // FormData goes through untouched; everything else is JSON.
+        body:
+          method === 'DELETE'
+            ? undefined
+            : vars instanceof FormData
+              ? vars
+              : JSON.stringify(vars),
       }),
     // ponytail: spread args so this survives react-query changing the onSuccess arity
     onSuccess: (...args) => {
@@ -136,9 +146,12 @@ function useApiMutation<TData, TVars>(
   })
 }
 
-/** POST. `usePostData<User, NewUser>('/users', ['users'])` */
+/**
+ * POST. `usePostData<User, NewUser>('/users', ['users'])`
+ * Pass a function when the id is in the path, as with PUT/PATCH/DELETE.
+ */
 export function usePostData<TData = unknown, TVars = unknown>(
-  endpoint: string,
+  endpoint: string | ((vars: TVars) => string),
   key: unknown[],
   options?: MutationOpts<TData, TVars>,
 ) {
@@ -193,8 +206,11 @@ export function useOptimistic<TCached, TVars>(
       }
       return { previous }
     },
-    onError: (_err: ApiError, _vars: TVars, context?: { previous?: TCached }) => {
-      if (context?.previous !== undefined) queryClient.setQueryData(key, context.previous)
+    // react-query types the onMutate result as `unknown` here, so the cast is
+    // unavoidable — it is our own return value from two lines up.
+    onError: (_err: ApiError, _vars: TVars, snapshot: unknown) => {
+      const previous = (snapshot as { previous?: TCached } | undefined)?.previous
+      if (previous !== undefined) queryClient.setQueryData(key, previous)
     },
     // Always refetch: the server owns derived fields (counts, totals, states)
     // that the patch above only guessed at.
