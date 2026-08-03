@@ -1,11 +1,17 @@
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { MetricCard } from '@/components/patterns/metric-card'
 import { PageHeader } from '@/components/patterns/page-header'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import { QueryState } from '@/components/states'
 import { useFacultyExams } from '../api'
+import { dateTime, relative } from '@/lib/format'
+import { Badge, type BadgeTone } from '@/components/patterns/badge'
+
+const PAPER_TONE: Record<string, BadgeTone> = {
+  DRAFT: 'neutral',
+  SUBMITTED: 'info',
+  APPROVED: 'success',
+  REJECTED: 'danger',
+}
 
 /** Faculty Examination Management — Figma 1:3320. */
 export function FacultyExams() {
@@ -24,21 +30,26 @@ export function FacultyExams() {
           </div>
 
           <Card>
-            <CardHeader title="Course" />
-            <CardBody>
-              <label className="flex max-w-md flex-col gap-1.5">
-                <span className="text-link text-fg-heading">Select Course</span>
-                <Select defaultValue={d.courses[0]}>
-                  <SelectTrigger className="h-10" aria-label="Select Course">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {d.courses.map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
+            <CardHeader title="Question Papers" />
+            <CardBody className="flex flex-col gap-3">
+              {d.papers.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-border-strong bg-surface p-4"
+                >
+                  <div>
+                    <p className="text-link text-fg-heading">
+                      {p.section.course.code} — {p.section.course.title}
+                    </p>
+                    <p className="text-fg-muted">
+                      {p.submittedAt
+                        ? `Submitted ${relative(p.submittedAt)}`
+                        : `Due ${relative(p.dueAt)}`}
+                    </p>
+                  </div>
+                  <Badge tone={PAPER_TONE[p.status] ?? 'neutral'}>{p.status}</Badge>
+                </div>
+              ))}
             </CardBody>
           </Card>
 
@@ -47,14 +58,14 @@ export function FacultyExams() {
             <CardBody className="flex flex-col gap-3">
               {d.duties.map((x) => (
                 <div
-                  key={x.title}
+                  key={x.id}
                   className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-border-strong bg-surface p-4"
                 >
                   <div>
                     <p className="text-link text-fg-heading">{x.title}</p>
-                    <p className="text-fg-muted">{x.place}</p>
+                    <p className="text-fg-muted">{x.venue}</p>
                   </div>
-                  <p className="text-link text-brand-700">{x.when}</p>
+                  <p className="text-link text-brand-700">{dateTime(x.startsAt)}</p>
                 </div>
               ))}
             </CardBody>

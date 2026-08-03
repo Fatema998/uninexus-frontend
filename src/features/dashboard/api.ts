@@ -2,6 +2,7 @@ import { useFixture } from '@/lib/fixtures'
 import { useGetData } from '@/hooks/use-api'
 import type { MetricTone } from '@/components/patterns/metric-card'
 import type { StudentDashboardResponse } from '@/types'
+import type { FacultyDashboardResponse } from '@/types/faculty'
 
 /**
  * Dashboard data. Values are transcribed from the Figma frames
@@ -9,8 +10,8 @@ import type { StudentDashboardResponse } from '@/types'
  * design at a glance — replace `useFixture` with `useGetData` once the Django
  * endpoints exist. Query keys already follow the [module, resource] convention.
  *
- * The student dashboard is the first module across: it talks to the real
- * fetch path against `bun run mock`. Faculty and admin still use fixtures.
+ * Student and faculty talk to the real fetch path against `bun run mock`.
+ * Admin is still on fixtures until its contract lands.
  */
 
 export type Metric = {
@@ -30,46 +31,8 @@ export const useStudentDashboard = () =>
 
 // ---------------------------------------------------------------- faculty
 
-export type FacultyDashboard = {
-  metrics: Metric[]
-  schedule: { state: 'CURRENT' | 'UPCOMING'; title: string; meta: string }[]
-  courses: { name: string; code: string; section: string; students: number; tag: string }[]
-  reviews: { title: string; meta: string }[]
-  teaching: { completed: number; remaining: number }
-  activity: { title: string; meta: string; tone: MetricTone }[]
-  insight: string
-}
-
 export const useFacultyDashboard = () =>
-  useFixture<FacultyDashboard>(['faculty', 'dashboard'], {
-    metrics: [
-      { label: 'Active Courses', value: '06', tone: 'brand', icon: 'BookOpen' },
-      { label: 'Total Students', value: '248', tone: 'accent', icon: 'Users' },
-      { label: "Today's Classes", value: '03', tone: 'info', icon: 'Clock' },
-      { label: 'Pending Assignment Reviews', value: '38', tone: 'warning', icon: 'ClipboardList' },
-      { label: 'Attendance Pending', value: '01', tone: 'danger', icon: 'TriangleAlert' },
-      { label: 'Research Projects', value: '03', tone: 'brand', icon: 'FlaskConical' },
-    ],
-    schedule: [
-      { state: 'CURRENT', title: 'Data Structures & AI', meta: 'Room 402 • 10:30 AM - 12:00 PM' },
-      { state: 'UPCOMING', title: 'Ethics in Computing', meta: 'Auditorium B • 02:00 PM' },
-    ],
-    courses: [
-      { name: 'Intro to Machine Learning', code: 'CS-401', section: 'Section A', students: 52, tag: 'AI' },
-      { name: 'Database Systems', code: 'CS-302', section: 'Section B', students: 45, tag: 'DB' },
-    ],
-    reviews: [
-      { title: 'Neural Network Optimization', meta: 'Submitted by Sarah Jenkins • 2 hours ago' },
-      { title: 'Data Mining Lab Report', meta: 'Submitted by Marcus Chen • 4 hours ago' },
-    ],
-    teaching: { completed: 10, remaining: 4 },
-    activity: [
-      { title: 'Grades Published', meta: 'Midterm Exam - Sec A • 20m ago', tone: 'brand' },
-      { title: 'New Course Material', meta: 'Advanced ML Lecture 04 • 1h ago', tone: 'accent' },
-      { title: 'Meeting Scheduled', meta: 'Curriculum Committee • 3h ago', tone: 'success' },
-    ],
-    insight: 'Students in CS-401 are struggling with "Recursion". Consider adding a remedial session.',
-  })
+  useGetData<FacultyDashboardResponse>('/api/faculty/dashboard/', ['faculty', 'dashboard'])
 
 // ------------------------------------------------------------------ admin
 
