@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router'
-import { GraduationCap, Loader2 } from 'lucide-react'
+import { GraduationCap, Loader2, ShieldCheck, UserRound } from 'lucide-react'
+import type { Role } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { ApiError } from '@/hooks/use-api'
 import { homeFor } from '@/lib/auth'
@@ -12,6 +13,12 @@ import { useAuth } from './auth-context'
  * from docs/design.md so it will not look foreign, but invents no new visual
  * language. Replace wholesale when the login/signup designs arrive.
  */
+const DEV_ROLE_ICON: Record<Role, typeof UserRound> = {
+  student: UserRound,
+  faculty: GraduationCap,
+  admin: ShieldCheck,
+}
+
 export function LoginPage() {
   const { user, login } = useAuth()
   const navigate = useNavigate()
@@ -21,17 +28,11 @@ export function LoginPage() {
 
   if (user) return <Navigate to={homeFor(user.role)} replace />
 
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
+  async function signIn(username: string, password: string) {
     setError(null)
     setPending(true)
-
-    const form = new FormData(e.currentTarget)
     try {
-      const next = await login(
-        String(form.get('username') ?? ''),
-        String(form.get('password') ?? ''),
-      )
+      const next = await login(username, password)
       const from = (location.state as { from?: string } | null)?.from
       void navigate(from ?? homeFor(next.role), { replace: true })
     } catch (err) {
@@ -47,6 +48,12 @@ export function LoginPage() {
     } finally {
       setPending(false)
     }
+  }
+
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    void signIn(String(form.get('username') ?? ''), String(form.get('password') ?? ''))
   }
 
   return (
@@ -102,10 +109,31 @@ export function LoginPage() {
           </Button>
 
           {devAuthEnabled() && (
-            <p className="mt-4 border-t border-border pt-4 text-center text-fg-muted">
-              No API configured — dev sign-in is active. Use{' '}
-              <span className="text-fg-heading">{DEV_USERS.join(' / ')}</span> with any password.
-            </p>
+            <div className="mt-5 border-t border-border pt-5">
+              <p className="mb-3 text-center text-eyebrow uppercase text-fg-muted">
+                Dev sign-in — pick a role
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {DEV_USERS.map((role) => {
+                  const Icon = DEV_ROLE_ICON[role]
+                  return (
+                    <button
+                      key={role}
+                      type="button"
+                      disabled={pending}
+                      onClick={() => void signIn(role, 'dev')}
+                      className="flex flex-col items-center gap-1.5 rounded-control border border-border-strong bg-canvas p-3 text-link capitalize text-fg-heading transition-colors hover:border-brand-600 hover:bg-surface-subtle disabled:opacity-50"
+                    >
+                      <Icon className="size-4.5 text-fg-muted" aria-hidden />
+                      {role}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="mt-3 text-center text-fg-muted">
+                No API configured. Signs in locally without the Django backend.
+              </p>
+            </div>
           )}
         </form>
       </div>

@@ -1,9 +1,9 @@
-import { CalendarPlus, Send, Sparkles } from 'lucide-react'
+import { CalendarPlus } from 'lucide-react'
+import { AssistantPanel } from '@/components/patterns/assistant-panel'
 import { Card, CardBody, CardHeader } from '@/components/patterns/card'
 import { HeroBanner } from '@/components/patterns/hero-banner'
 import { MetricCard } from '@/components/patterns/metric-card'
 import { Badge } from '@/components/patterns/badge'
-import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/states'
 import { useStudentDashboard } from './api'
 import { iconFor } from './icon-map'
@@ -93,69 +93,11 @@ export function StudentDashboard() {
                 </CardBody>
               </Card>
 
-              <AssistantPanel assistant={d.assistant} />
+              <AssistantPanel {...d.assistant} />
             </aside>
           </div>
         </div>
       )}
     </QueryState>
-  )
-}
-
-/** AIAssistantPanel — design.md §3. Composer is inert until PRD §6.8 is settled. */
-function AssistantPanel({
-  assistant,
-}: {
-  assistant: { messages: { from: 'ai' | 'me'; text: string }[]; suggestions: string[] }
-}) {
-  return (
-    <Card>
-      <CardHeader title="Academic AI" icon={Sparkles}>
-        <span className="flex items-center gap-1.5">
-          <span className="size-1.5 rounded-full bg-success-dot" aria-hidden />
-          <span className="text-eyebrow uppercase text-fg-muted">Always Online</span>
-        </span>
-      </CardHeader>
-
-      <CardBody className="flex flex-col gap-3">
-        {assistant.messages.map((m, i) => (
-          <p
-            key={i}
-            className={
-              m.from === 'ai'
-                ? 'max-w-[85%] rounded-control bg-surface-subtle p-3 text-fg-body'
-                : 'ml-auto max-w-[85%] rounded-control bg-brand-600/10 p-3 text-fg-heading'
-            }
-          >
-            {m.text}
-          </p>
-        ))}
-
-        <div className="mt-1 flex flex-wrap gap-2">
-          {assistant.suggestions.map((s) => (
-            <button
-              key={s}
-              type="button"
-              className="rounded-full border border-border-strong px-3 py-1 text-link text-fg-body hover:bg-surface-subtle"
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-2 flex gap-2">
-          <label className="flex-1">
-            <span className="sr-only">Ask the assistant</span>
-            <input
-              placeholder="Ask anything…"
-              className="h-10 w-full rounded-control border border-border-strong bg-surface px-3 outline-none focus-visible:border-brand-600"
-            />
-          </label>
-          <Button size="icon-lg" aria-label="Send">
-            <Send className="size-4" aria-hidden />
-          </Button>
-        </div>
-      </CardBody>
-    </Card>
   )
 }

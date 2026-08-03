@@ -13,6 +13,7 @@ import type { Role } from '@/lib/auth'
  * Phases 4–6 grow this map one entry at a time.
  */
 const SCREEN_COMPONENTS: Record<string, ComponentType> = {
+  // Phase 3 — dashboards
   '/student': lazy(() =>
     import('@/features/dashboard/student-dashboard').then((m) => ({ default: m.StudentDashboard })),
   ),
@@ -21,6 +22,45 @@ const SCREEN_COMPONENTS: Record<string, ComponentType> = {
   ),
   '/admin': lazy(() =>
     import('@/features/dashboard/admin-dashboard').then((m) => ({ default: m.AdminDashboard })),
+  ),
+
+  // Phase 4.1 — academic
+  '/student/academic/courses': lazy(() =>
+    import('@/features/academic/pages/my-courses').then((m) => ({ default: m.MyCourses })),
+  ),
+  '/student/academic/curriculum': lazy(() =>
+    import('@/features/academic/pages/curriculum').then((m) => ({ default: m.Curriculum })),
+  ),
+  '/student/academic/degree-progress': lazy(() =>
+    import('@/features/academic/pages/degree-progress').then((m) => ({ default: m.DegreeProgress })),
+  ),
+  '/student/academic/credits': lazy(() =>
+    import('@/features/academic/pages/credit-progress').then((m) => ({ default: m.CreditProgress })),
+  ),
+  '/student/academic/routine': lazy(() =>
+    import('@/features/academic/pages/class-routine').then((m) => ({ default: m.ClassRoutine })),
+  ),
+  '/student/academic/calendar': lazy(() =>
+    import('@/features/academic/pages/academic-calendar').then((m) => ({ default: m.AcademicCalendar })),
+  ),
+  '/student/academic/faculty': lazy(() =>
+    import('@/features/academic/pages/faculty-directory').then((m) => ({ default: m.FacultyDirectory })),
+  ),
+  '/student/academic/classrooms': lazy(() =>
+    import('@/features/academic/pages/classrooms').then((m) => ({ default: m.Classrooms })),
+  ),
+  '/student/academic/registration/courses': lazy(() =>
+    import('@/features/academic/pages/course-registration').then((m) => ({
+      default: m.CourseRegistration,
+    })),
+  ),
+  '/student/academic/registration/semester': lazy(() =>
+    import('@/features/academic/pages/semester-registration').then((m) => ({
+      default: m.SemesterRegistration,
+    })),
+  ),
+  '/student/academic/registration/drop-add': lazy(() =>
+    import('@/features/academic/pages/drop-add').then((m) => ({ default: m.DropAdd })),
   ),
 }
 
