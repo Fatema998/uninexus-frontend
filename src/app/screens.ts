@@ -47,4 +47,40 @@ export const SCREEN_COMPONENTS: Record<string, ComponentType> = {
   '/student/lms/announcements': page(() => import('@/features/lms/pages/announcements'), 'Announcements'),
   '/student/lms/gradebook': page(() => import('@/features/lms/pages/gradebook'), 'Gradebook'),
   '/student/lms/downloads': page(() => import('@/features/lms/pages/downloads'), 'Downloads'),
+
+  // ---------------------------------------------- Phase 4.3 — attendance
+  '/student/attendance': page(() => import('@/features/attendance/pages/overview'), 'AttendanceOverview'),
+  '/student/attendance/daily': page(() => import('@/features/attendance/pages/daily'), 'DailyAttendance'),
+  '/student/attendance/by-course': page(() => import('@/features/attendance/pages/course-attendance'), 'CourseAttendance'),
+  '/student/attendance/history': page(() => import('@/features/attendance/pages/history'), 'AttendanceHistory'),
+  '/student/attendance/analytics': page(() => import('@/features/attendance/pages/analytics'), 'AttendanceAnalytics'),
+
+  // --------------------------------------------- Phase 4.4 — examination
+  '/student/exams': page(() => import('@/features/exams/pages/overview'), 'ExamOverview'),
+  '/student/exams/schedule': page(() => import('@/features/exams/pages/schedule'), 'ExamSchedule'),
+  '/student/exams/upcoming': page(() => import('@/features/exams/pages/upcoming'), 'UpcomingExams'),
+  '/student/exams/admit-card': page(() => import('@/features/exams/pages/admit-card'), 'AdmitCard'),
+  '/student/exams/results': page(() => import('@/features/exams/pages/results'), 'ExamResults'),
+  '/student/exams/grade-report': page(() => import('@/features/exams/pages/grade-report'), 'GradeReport'),
+  '/student/exams/revaluation': page(() => import('@/features/exams/pages/revaluation'), 'Revaluation'),
+  '/student/exams/attendance': page(() => import('@/features/exams/pages/attendance-sheet'), 'ExamAttendanceSheet'),
+  '/student/exams/analytics': page(() => import('@/features/exams/pages/analytics'), 'ExamAnalytics'),
+
+  // ------------------------------------------------- Phase 4.5 — finance
+  '/student/finance': page(() => import('@/features/finance/pages/overview'), 'FinanceOverview'),
+  '/student/finance/pay': page(() => import('@/features/finance/pages/make-payment'), 'MakePayment'),
+  '/student/finance/statement': page(() => import('@/features/finance/pages/fee-statement'), 'FeeStatement'),
+  '/student/finance/invoices': page(() => import('@/features/finance/pages/invoices'), 'Invoices'),
+  '/student/finance/installments': page(() => import('@/features/finance/pages/installments'), 'Installments'),
+  '/student/finance/history': page(() => import('@/features/finance/pages/payment-history'), 'PaymentHistory'),
+
+  // ------------------------------------------------------ Phase 4.6 — AI
+  '/student/ai': page(() => import('@/features/ai/pages/overview'), 'AiOverview'),
+  '/student/ai/chat': page(() => import('@/features/ai/pages/chat'), 'AiChat'),
+  '/student/ai/study-planner': page(() => import('@/features/ai/pages/study-planner'), 'StudyPlanner'),
+  '/student/ai/notes': page(() => import('@/features/ai/pages/note-generator'), 'NoteGenerator'),
+  '/student/ai/quiz': page(() => import('@/features/ai/pages/quiz-generator'), 'QuizGenerator'),
+  '/student/ai/assignment-helper': page(() => import('@/features/ai/pages/assignment-helper'), 'AssignmentHelper'),
+  '/student/ai/advisor': page(() => import('@/features/ai/pages/advisor'), 'Advisor'),
+  '/student/ai/recommendations': page(() => import('@/features/ai/pages/recommendations'), 'Recommendations'),
 }
