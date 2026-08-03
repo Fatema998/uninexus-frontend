@@ -1,11 +1,16 @@
 import { useFixture } from '@/lib/fixtures'
+import { useGetData } from '@/hooks/use-api'
 import type { MetricTone } from '@/components/patterns/metric-card'
+import type { StudentDashboardResponse } from '@/types'
 
 /**
  * Dashboard data. Values are transcribed from the Figma frames
  * (student 9:6820 · faculty 1:2 · admin 7:15548) so the screens match the
  * design at a glance — replace `useFixture` with `useGetData` once the Django
  * endpoints exist. Query keys already follow the [module, resource] convention.
+ *
+ * The student dashboard is the first module across: it talks to the real
+ * fetch path against `bun run mock`. Faculty and admin still use fixtures.
  */
 
 export type Metric = {
@@ -20,47 +25,8 @@ export type Metric = {
 
 // ---------------------------------------------------------------- student
 
-export type StudentDashboard = {
-  hero: { badge: string; heading: string; body: string }
-  metrics: Metric[]
-  deadlines: { day: string; month: string; title: string; meta: string; overdue?: boolean }[]
-  courses: { name: string; teacher: string; status: 'ENROLLED' | 'PENDING'; grade: string }[]
-  assistant: { messages: { from: 'ai' | 'me'; text: string }[]; suggestions: string[] }
-}
-
 export const useStudentDashboard = () =>
-  useFixture<StudentDashboard>(['student', 'dashboard'], {
-    hero: {
-      badge: 'Semester Active',
-      heading: 'Welcome back, Alex',
-      body: 'Your current semester progress is 74%. Two deadlines are due this week.',
-    },
-    metrics: [
-      { label: 'Cumulative GPA', value: '3.88', tone: 'brand', icon: 'GraduationCap' },
-      { label: 'Total Credits', value: '104', unit: '/ 120', tone: 'accent', icon: 'Award', progress: 86 },
-      { label: 'Attendance', value: '92%', tone: 'info', icon: 'CalendarCheck' },
-      { label: 'Active Courses', value: '05', tone: 'brand', icon: 'BookOpen' },
-      { label: 'Due This Week', value: '02', tone: 'warning', icon: 'ClipboardList' },
-      { label: 'Fees Cleared', value: '100%', tone: 'success', icon: 'Wallet' },
-    ],
-    deadlines: [
-      { day: '24', month: 'OCT', title: 'Algorithm Analysis Quiz', meta: 'Canvas Submission • 11:59 PM', overdue: true },
-      { day: '28', month: 'OCT', title: 'LMS Ethics Essay', meta: 'Turnitin Check Required' },
-    ],
-    courses: [
-      { name: 'Advanced Algorithms', teacher: 'Prof. Sarah Jenkins • Room 402', status: 'ENROLLED', grade: 'A-' },
-      { name: 'Machine Learning Foundations', teacher: 'Dr. Michael Chen • Online Sync', status: 'ENROLLED', grade: 'B+' },
-      { name: 'Digital Ethics', teacher: 'Prof. Alistair Vance • Hybrid', status: 'PENDING', grade: 'N/A' },
-    ],
-    assistant: {
-      messages: [
-        { from: 'ai', text: 'Analyzing your study patterns for the upcoming finals week.' },
-        { from: 'me', text: 'What should I revise first?' },
-        { from: 'ai', text: 'Start with Recursion — it is 40% of the Algorithms quiz on the 24th.' },
-      ],
-      suggestions: ['Plan my week', 'Summarise lecture 04', 'Practice quiz'],
-    },
-  })
+  useGetData<StudentDashboardResponse>('/api/student/dashboard/', ['student', 'dashboard'])
 
 // ---------------------------------------------------------------- faculty
 

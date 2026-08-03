@@ -14,7 +14,12 @@ Design and build documentation for **UniGPT** — an AI-native university portal
 | [design.md](design.md) | **Token authority.** Colours, type, spacing, radius, components, layout rules | Writing any UI. Every visual value comes from here |
 | [screen-inventory.md](screen-inventory.md) | All 93 frames → node IDs → routes, canonical vs superseded | Picking up a screen; wiring routes; pulling a frame from Figma |
 | [architecture.md](architecture.md) | Stack, directory layout, routing, data layer, conventions | Deciding where a file goes or how to fetch something |
+| [api/student.md](api/student.md) | **Wire contract.** Every student endpoint, request/response types, optimistic-UI policy, transport | Wiring a student screen to the API; briefing the backend dev |
 | [build-plan.md](build-plan.md) | 7 phases, tasks, dependencies, definitions of done | Planning a sprint; knowing what's next |
+
+`api/faculty.md`, `api/admin.md` and `api/general.md` follow the same shape;
+the persona-neutral conventions live in [api/student.md §1](api/student.md)
+until there are three of them to share.
 
 ## Order to read them
 
@@ -53,3 +58,15 @@ bun install && bun run dev
 Sign in as `student`, `faculty`, or `admin` with any password. While `VITE_API_URL` is unset, a dev-only seam (`src/lib/dev-auth.ts`) mints a local token so the UI runs without the Django backend. Set `VITE_API_URL` and the seam disables itself.
 
 Every screen is lazy-loaded into its own chunk and driven by fixtures through hooks shaped like `use-api`, so swapping a module to the real Django API is a one-line change in its `api.ts`.
+
+### Working against the mock API
+
+```bash
+bun run mock                                    # dev API on :8787
+VITE_API_URL=http://localhost:8787 bun run dev  # app against it
+bun run mock:test                               # verify the mock still matches the contract
+```
+
+All 61 student read endpoints and 23 writes are live, typed against
+`src/types`. The student dashboard is already on it; the remaining modules
+are a mechanical swap per [api/student.md §9](api/student.md).

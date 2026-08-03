@@ -126,6 +126,11 @@ export const useAttendanceSummary = () =>
 
 Query-key convention: `[module, resource, ...params]`.
 
+The full student wire contract — every path, request and response type,
+optimistic-UI policy, and the transport decisions (JSON, compression,
+caching) — is [api/student.md](api/student.md). Types live in `src/types`;
+`mock/` serves them for development.
+
 Until the Django endpoints exist, back these with `useFixture` from `src/lib/fixtures.ts` — same return shape as `useGetData`, so components never learn the difference. Swapping a module to the real API is a one-line change in its `api.ts`:
 
 ```diff

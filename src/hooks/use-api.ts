@@ -164,6 +164,47 @@ export function usePatchData<TData = unknown, TVars = unknown>(
 }
 
 /**
+ * Options that make a mutation optimistic: patch the cache now, roll back if
+ * the server disagrees, refetch either way. Spread into any mutation hook.
+ *
+ *   const patch = useOptimistic<Note[], CreateNoteRequest>(
+ *     ['lms', 'notes'],
+ *     (notes, vars) => [{ ...vars, id: `tmp-${crypto.randomUUID()}` }, ...notes],
+ *   )
+ *   usePostData<Note, CreateNoteRequest>('/api/student/lms/notes/', ['lms','notes'], patch)
+ *
+ * `cancelQueries` first is not optional: an in-flight GET that resolves after
+ * the patch would overwrite it with pre-mutation data.
+ *
+ * Do NOT use this on anything that moves money — see docs/api/student.md §5.3.
+ */
+export function useOptimistic<TCached, TVars>(
+  key: unknown[],
+  patch: (previous: TCached, vars: TVars) => TCached,
+) {
+  const queryClient = useQueryClient()
+
+  return {
+    onMutate: async (vars: TVars) => {
+      await queryClient.cancelQueries({ queryKey: key })
+      const previous = queryClient.getQueryData<TCached>(key)
+      if (previous !== undefined) {
+        queryClient.setQueryData<TCached>(key, patch(previous, vars))
+      }
+      return { previous }
+    },
+    onError: (_err: ApiError, _vars: TVars, context?: { previous?: TCached }) => {
+      if (context?.previous !== undefined) queryClient.setQueryData(key, context.previous)
+    },
+    // Always refetch: the server owns derived fields (counts, totals, states)
+    // that the patch above only guessed at.
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: key })
+    },
+  }
+}
+
+/**
  * DELETE. Pass a function when the id is in the path:
  * `useDelete<void, string>((id) => `/users/${id}`, ['users'])`
  */
