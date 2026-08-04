@@ -9,7 +9,6 @@ import { QueryState } from '@/components/states'
 import { ApiError } from '@/hooks/use-api'
 import { date } from '@/lib/format'
 import { useDropAdd, useSubmitDropAdd } from '../api'
-import type { ApiErrorBody } from '@/types'
 
 /** Drop/Add Course — Figma 6:10404. */
 export function DropAdd() {
@@ -17,7 +16,7 @@ export function DropAdd() {
   const submit = useSubmitDropAdd()
   const [dropping, setDropping] = useState<string[]>([])
 
-  const error = submit.error instanceof ApiError ? (submit.error.body as ApiErrorBody) : null
+  const error = submit.error instanceof ApiError ? submit.error : null
 
   return (
     <QueryState query={query}>

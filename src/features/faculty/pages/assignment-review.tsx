@@ -12,7 +12,6 @@ import { QueryState } from '@/components/states'
 import { ApiError } from '@/hooks/use-api'
 import { dateTime, fileSize, gpa } from '@/lib/format'
 import { useGradeSubmission, useSubmissionDetail } from '../api'
-import type { ApiErrorBody } from '@/types'
 
 /**
  * Faculty Assignment Review — Figma 1:4053.
@@ -31,7 +30,7 @@ export function AssignmentReview() {
   const [feedback, setFeedback] = useState('')
   const [release, setRelease] = useState(false)
 
-  const error = grade.error instanceof ApiError ? (grade.error.body as ApiErrorBody) : null
+  const error = grade.error instanceof ApiError ? grade.error : null
 
   return (
     <QueryState query={query}>
@@ -174,7 +173,7 @@ export function AssignmentReview() {
 
                     {grade.isError && (
                       <p role="alert" className="text-danger">
-                        {error?.scores ?? error?.detail ?? 'Could not save the grade.'}
+                        {error?.fieldError('scores') ?? error?.detail ?? 'Could not save the grade.'}
                       </p>
                     )}
 

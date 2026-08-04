@@ -7,19 +7,84 @@ import {
 } from '@tanstack/react-query'
 
 import { clearTokens, getAccessToken, getRefreshToken, setTokens } from '@/lib/auth'
+import type { Envelope, Problem } from '@/types/common'
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
+/**
+ * A non-2xx response, carrying the RFC 7807 problem the server sent.
+ * See docs/api/contract.md §3.
+ *
+ * Branch on `code`. Never branch on `detail` — it is copy, and copy changes.
+ */
 export class ApiError extends Error {
   status: number
-  body: unknown
+  problem: Problem
 
   constructor(status: number, body: unknown) {
-    super(`Request failed with ${status}`)
+    const problem = toProblem(status, body)
+    super(problem.detail ?? problem.title)
     this.name = 'ApiError'
     this.status = status
-    this.body = body
+    this.problem = problem
   }
+
+  /** Machine-readable reason, when the server named one. */
+  get code(): string | undefined {
+    return this.problem.code
+  }
+
+  /** Human-readable prose for this occurrence. Safe to render. */
+  get detail(): string | undefined {
+    return this.problem.detail
+  }
+
+  /** First rejection for a field, or undefined if that field was accepted. */
+  fieldError(field: string): string | undefined {
+    return this.problem.errors?.find((e) => e.field === field)?.detail
+  }
+}
+
+/**
+ * Coerce whatever came back into a Problem. A proxy 502 serves HTML and a
+ * dropped connection serves nothing — neither is the backend's fault, and
+ * neither should crash the error path that exists to report it.
+ */
+function toProblem(status: number, body: unknown): Problem {
+  if (body && typeof body === 'object' && 'title' in body && 'status' in body) {
+    return body as Problem
+  }
+  return {
+    type: 'about:blank',
+    title: `Request failed with ${status}`,
+    status,
+    detail: typeof body === 'string' && body ? body : undefined,
+  }
+}
+
+/**
+ * Strip the success envelope, so hooks and screens never see it.
+ *
+ * This is the whole reason the envelope costs nothing: one unwrap here
+ * instead of a `.data` on every one of 80-odd endpoints. When the server
+ * paged the list, `meta.pagination` is folded onto the rows so the caller
+ * gets one object (`Paginated<T>`) rather than two.
+ */
+export function unwrap<T>(raw: unknown): T {
+  if (!raw || typeof raw !== 'object' || !('data' in raw) || !('meta' in raw)) {
+    return raw as T
+  }
+  const { data, meta } = raw as Envelope<unknown>
+  if (meta?.pagination) {
+    // A bare paged list: the rows become `results`.
+    if (Array.isArray(data)) return { ...meta.pagination, results: data } as T
+    // A screen payload that *contains* the paged list (admin user management
+    // ships collection-wide metrics alongside the page). Paging joins it.
+    if (data && typeof data === 'object' && 'results' in data) {
+      return { ...data, ...meta.pagination } as T
+    }
+  }
+  return data as T
 }
 
 /** Broadcast when the session is unrecoverable, so AuthProvider can drop the user. */
@@ -42,7 +107,7 @@ function refreshAccessToken(): Promise<string | null> {
         body: JSON.stringify({ refresh }),
       })
       if (!res.ok) return null
-      const { access } = (await res.json()) as { access?: string }
+      const { access } = unwrap<{ access?: string }>(await res.json()) ?? {}
       if (!access) return null
       setTokens(access)
       return access
@@ -74,8 +139,12 @@ function buildInit(init: RequestInit | undefined, token: string | null): Request
 }
 
 /**
- * Thin fetch wrapper: JSON in, JSON out, throws ApiError on non-2xx.
- * Attaches the JWT and retries once through a token refresh on 401.
+ * Thin fetch wrapper: JSON in, unwrapped `data` out, throws ApiError on
+ * non-2xx. Attaches the JWT and retries once through a token refresh on 401.
+ *
+ * This is the single place the response contract is enforced — every screen
+ * in the product reaches the network through here, so the envelope is
+ * stripped once and the problem is parsed once.
  */
 export async function apiFetch<T>(endpoint: string, init?: RequestInit): Promise<T> {
   const url = `${BASE_URL}${endpoint}`
@@ -94,7 +163,7 @@ export async function apiFetch<T>(endpoint: string, init?: RequestInit): Promise
   // 204 and friends have no body to parse.
   const body = res.status === 204 ? null : await res.json().catch(() => null)
   if (!res.ok) throw new ApiError(res.status, body)
-  return body as T
+  return unwrap<T>(body)
 }
 
 type QueryOpts<T> = Omit<UseQueryOptions<T, ApiError>, 'queryKey' | 'queryFn'>

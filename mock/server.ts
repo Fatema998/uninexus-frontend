@@ -20,14 +20,18 @@
 
 import type {
   AddCourseRequest,
-  ApiErrorBody,
   CreateNoteRequest,
   CreatePaymentRequest,
   CreateReplyRequest,
   CreateRevaluationRequest,
   DropAddRequest,
+  FieldError,
   ForumReply,
+  Meta,
   Note,
+  PagePagination,
+  Pagination,
+  Problem,
   PaymentIntent,
   QuizAttemptRequest,
   QuizAttemptResult,
@@ -53,15 +57,40 @@ const CORS = {
   'Access-Control-Max-Age': '86400',
 }
 
+/** Problem `type` URIs live under one base so they are dereferenceable. */
+const PROBLEM_BASE = 'https://api.unigpt.edu/problems'
+
+/** Stable per status. `title` must not vary with the occurrence — that is `detail`. */
+const TITLES: Record<number, string> = {
+  400: 'Bad request',
+  401: 'Not authenticated',
+  403: 'Forbidden',
+  404: 'Not found',
+  409: 'Conflict',
+  422: 'Validation failed',
+  429: 'Too many requests',
+  500: 'Server error',
+}
+
 /**
- * JSON, gzipped when it is worth it and the client asked.
+ * Serialise, gzip when it is worth it and the client asked, tag the response.
  *
- * In production this is the reverse proxy's job (see docs/api/student.md §1.4)
+ * In production the gzip is the reverse proxy's job (docs/api/general.md §4)
  * — it is here so the dev numbers are honest about what ships.
  */
-function json(data: unknown, status = 200, req?: Request): Response {
-  const body = JSON.stringify(data)
-  const headers: Record<string, string> = { ...CORS, 'Content-Type': 'application/json' }
+function send(
+  payload: unknown,
+  status: number,
+  contentType: string,
+  requestId: string,
+  req?: Request,
+): Response {
+  const body = JSON.stringify(payload)
+  const headers: Record<string, string> = {
+    ...CORS,
+    'Content-Type': contentType,
+    'X-Request-Id': requestId,
+  }
 
   const wantsGzip = req?.headers.get('accept-encoding')?.includes('gzip')
   if (wantsGzip && body.length >= GZIP_MIN_BYTES) {
@@ -73,8 +102,72 @@ function json(data: unknown, status = 200, req?: Request): Response {
   return new Response(body, { status, headers })
 }
 
+/** Every 2xx body: `{ data, meta }`. See docs/api/contract.md §2. */
+function json(data: unknown, status = 200, req?: Request, pagination?: Pagination): Response {
+  const requestId = crypto.randomUUID()
+  const meta: Meta = { requestId, timestamp: new Date().toISOString() }
+  if (pagination) meta.pagination = pagination
+  return send({ data, meta }, status, 'application/json', requestId, req)
+}
+
+/** A paged list: rows go in `data`, paging goes in `meta`. Never both in one. */
+const paged = <T>(rows: T[], pagination: Pagination, req?: Request) =>
+  json(rows, 200, req, pagination)
+
+const cursored = <T>(rows: T[], nextCursor: string | null, req?: Request) =>
+  paged(rows, { nextCursor }, req)
+
 const noContent = () => new Response(null, { status: 204, headers: CORS })
-const fail = (status: number, body: ApiErrorBody, req?: Request) => json(body, status, req)
+
+/**
+ * The call sites below still write DRF's error shape — `{ detail, code }` for
+ * non-field failures, `{ field: ['message'] }` for field ones — because that
+ * is what a DRF `ValidationError` actually produces. This function is the
+ * translation to RFC 7807, and it is deliberately the *only* place that
+ * knows both shapes: on the Django side it becomes one custom
+ * `EXCEPTION_HANDLER`. See docs/api/contract.md §3.5.
+ */
+type FailBody = { detail?: string; code?: string; [field: string]: string | string[] | undefined }
+
+function fail(status: number, body: FailBody, req?: Request): Response {
+  const requestId = crypto.randomUUID()
+
+  const errors: FieldError[] = []
+  for (const [field, value] of Object.entries(body)) {
+    if (field === 'detail' || field === 'code' || !Array.isArray(value)) continue
+    for (const detail of value) {
+      errors.push({
+        field,
+        code: /may not be blank|required|at least one/i.test(detail) ? 'blank' : 'invalid',
+        detail,
+      })
+    }
+  }
+
+  // Field-level rejections are 422 under this contract. A 400 with no field
+  // errors stays a 400 — it means the request itself was malformed.
+  const finalStatus = status === 400 && errors.length > 0 ? 422 : status
+  const code = body.code ?? (errors.length > 0 ? 'validation_failed' : undefined)
+  const detail =
+    body.detail ??
+    (errors.length > 0
+      ? `${errors.length} field${errors.length === 1 ? ' was' : 's were'} rejected.`
+      : undefined)
+
+  const problem: Problem = {
+    type: code ? `${PROBLEM_BASE}/${code.replace(/_/g, '-')}` : 'about:blank',
+    title: TITLES[finalStatus] ?? `HTTP ${finalStatus}`,
+    status: finalStatus,
+    ...(detail ? { detail } : {}),
+    ...(req ? { instance: new URL(req.url).pathname } : {}),
+    ...(code ? { code } : {}),
+    ...(errors.length > 0 ? { errors } : {}),
+    requestId,
+  }
+
+  return send(problem, finalStatus, 'application/problem+json', requestId, req)
+}
+
 const notFound = (req: Request) => fail(404, { detail: 'Not found.' }, req)
 
 // --------------------------------------------------------------------- auth
@@ -244,7 +337,10 @@ GET('/api/student/academic/faculty/', ({ req, query }) => {
       (!q || f.name.toLowerCase().includes(q) || (f.title ?? '').toLowerCase().includes(q)) &&
       (!dept || f.department === dept),
   )
-  return json(paginate(rows, query, '/api/student/academic/faculty/'), 200, req)
+  {
+    const { results, pagination } = paginate(rows, query, '/api/student/academic/faculty/')
+    return paged(results, pagination, req)
+  }
 })
 
 serve('/api/student/academic/registration/semester/', D.SEMESTER_REGISTRATION)
@@ -268,7 +364,10 @@ GET('/api/student/academic/registration/courses/', ({ req, query }) => {
     // Seats move as the session adds courses, so the UI can show its own effect.
     state.cart.has(o.id) ? { ...o, seatsTaken: o.seatsTaken + 1, canRegister: false, blockedReason: 'Already added.' } : o,
   )
-  return json(paginate(rows, query, '/api/student/academic/registration/courses/'), 200, req)
+  {
+    const { results, pagination } = paginate(rows, query, '/api/student/academic/registration/courses/')
+    return paged(results, pagination, req)
+  }
 })
 
 POST('/api/student/academic/registration/courses/', async ({ req }) => {
@@ -429,7 +528,7 @@ GET('/api/student/lms/forum/threads/', ({ req, query }) => {
     ...t,
     replyCount: t.replyCount + (state.replies[t.id]?.length ?? 0),
   }))
-  return json({ results: rows, nextCursor: null }, 200, req)
+  return cursored(rows, null, req)
 })
 
 GET('/api/student/lms/forum/threads/:id/', ({ req, params }) => {
@@ -479,7 +578,10 @@ GET('/api/student/lms/notes/', ({ req, query }) => {
   const rows = state.notes.filter(
     (n) => (!q || n.title.toLowerCase().includes(q)) && (!tag || n.tag === tag),
   )
-  return json(paginate(rows, query, '/api/student/lms/notes/'), 200, req)
+  {
+    const { results, pagination } = paginate(rows, query, '/api/student/lms/notes/')
+    return paged(results, pagination, req)
+  }
 })
 
 POST('/api/student/lms/notes/', async ({ req }) => {
@@ -592,12 +694,9 @@ serve('/api/student/finance/invoices/', D.INVOICES)
 serve('/api/student/finance/installments/', D.INSTALLMENTS)
 
 GET('/api/student/finance/history/', ({ req }) =>
-  json(
-    {
-      ...D.PAYMENT_HISTORY,
-      results: [...state.payments.filter((p) => p.status === 'SUCCESS').map(toRecord), ...D.PAYMENT_HISTORY.results],
-    },
-    200,
+  cursored(
+    [...state.payments.filter((p) => p.status === 'SUCCESS').map(toRecord), ...D.PAYMENT_HISTORY.results],
+    D.PAYMENT_HISTORY.nextCursor,
     req,
   ),
 )
@@ -671,7 +770,7 @@ serve('/api/student/ai/study-planner/options/', D.STUDY_PLANNER_OPTIONS)
 serve('/api/student/ai/quiz/options/', D.QUIZ_GENERATOR_OPTIONS)
 
 GET('/api/student/ai/conversations/', ({ req }) =>
-  json({ results: D.AI_OVERVIEW.recentConversations, nextCursor: null }, 200, req),
+  cursored(D.AI_OVERVIEW.recentConversations, null, req),
 )
 
 GET('/api/student/ai/conversations/:id/', ({ req, params }) =>
@@ -934,7 +1033,10 @@ GET('/api/faculty/library/', ({ req, query }) => {
       (!q || i.title.toLowerCase().includes(q) || i.author.toLowerCase().includes(q)) &&
       (!kind || i.kind === kind),
   )
-  return json(paginate(rows, query, '/api/faculty/library/'), 200, req)
+  {
+    const { results, pagination } = paginate(rows, query, '/api/faculty/library/')
+    return paged(results, pagination, req)
+  }
 })
 
 POST('/api/faculty/library/:id/reserve/', ({ req, params }) => {
@@ -977,8 +1079,8 @@ GET('/api/admin/users/', ({ req, query }) => {
       (!status || status === 'ALL' || u.status === status),
   )
 
-  const page = paginate(rows, query, '/api/admin/users/')
-  return json({ metrics: A.USER_METRICS, ...page }, 200, req)
+  const { results, pagination } = paginate(rows, query, '/api/admin/users/')
+  return json({ metrics: A.USER_METRICS, results }, 200, req, pagination)
 })
 
 POST('/api/admin/users/', async ({ req }) => {
@@ -1062,8 +1164,8 @@ GET('/api/admin/admissions/', ({ req, query }) => {
       (!status || status === 'ALL' || a.status === status),
   )
 
-  const page = paginate(rows, query, '/api/admin/admissions/')
-  return json({ metrics: A.ADMISSION_METRICS, programmes: A.PROGRAMMES, ...page }, 200, req)
+  const { results, pagination } = paginate(rows, query, '/api/admin/admissions/')
+  return json({ metrics: A.ADMISSION_METRICS, programmes: A.PROGRAMMES, results }, 200, req, pagination)
 })
 
 GET('/api/admin/admissions/:id/', ({ req, params }) => {
@@ -1193,7 +1295,7 @@ GET('/api/admin/finance/ledger/', ({ req, query }) => {
   const rows = A.LEDGER.filter(
     (e) => !direction || direction === 'ALL' || (direction === 'IN' ? e.inbound : !e.inbound),
   )
-  return json({ results: rows, nextCursor: null }, 200, req)
+  return cursored(rows, null, req)
 })
 
 // ---------------------------------------------------------------- settings
@@ -1257,13 +1359,14 @@ function paginate<T>(rows: T[], query: URLSearchParams, path: string) {
   const size = Math.min(Number(query.get('page_size') ?? 20), 100)
   const page = Math.max(Number(query.get('page') ?? 1), 1)
   const start = (page - 1) * size
-  const slice = rows.slice(start, start + size)
   const url = (p: number) => `http://localhost:${PORT}${path}?page=${p}&page_size=${size}`
   return {
-    count: rows.length,
-    next: start + size < rows.length ? url(page + 1) : null,
-    previous: page > 1 ? url(page - 1) : null,
-    results: slice,
+    results: rows.slice(start, start + size),
+    pagination: {
+      count: rows.length,
+      next: start + size < rows.length ? url(page + 1) : null,
+      previous: page > 1 ? url(page - 1) : null,
+    } satisfies PagePagination,
   }
 }
 

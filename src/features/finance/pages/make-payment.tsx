@@ -9,7 +9,7 @@ import { QueryState } from '@/components/states'
 import { ApiError } from '@/hooks/use-api'
 import { money } from '@/lib/format'
 import { useCreatePayment, usePaymentOptions } from '../api'
-import type { ApiErrorBody, PaymentMethod } from '@/types'
+import type { PaymentMethod } from '@/types'
 
 /**
  * Make Payment — Figma 1:9415.
@@ -33,7 +33,7 @@ export function MakePayment() {
    */
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID())
 
-  const fieldErrors = create.error instanceof ApiError ? (create.error.body as ApiErrorBody) : null
+  const fieldErrors = create.error instanceof ApiError ? create.error : null
 
   return (
     <QueryState query={query}>
@@ -175,7 +175,7 @@ export function MakePayment() {
 
                     {create.isError && (
                       <p role="alert" className="text-danger">
-                        {fieldErrors?.amount ?? fieldErrors?.detail ?? 'Payment could not be started.'}
+                        {fieldErrors?.fieldError('amount') ?? fieldErrors?.detail ?? 'Payment could not be started.'}
                       </p>
                     )}
 

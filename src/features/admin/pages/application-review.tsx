@@ -17,7 +17,6 @@ import { QueryState } from '@/components/states'
 import { ApiError } from '@/hooks/use-api'
 import { date, dateTime, relative } from '@/lib/format'
 import { useApplicationDetail, useDecideApplication } from '../api'
-import type { ApiErrorBody } from '@/types'
 import type { ApplicationStatus, DecideApplicationRequest } from '@/types/admin'
 
 const TONE: Record<ApplicationStatus, BadgeTone> = {
@@ -46,7 +45,7 @@ export function ApplicationReview() {
   const [templateId, setTemplateId] = useState('')
   const [note, setNote] = useState('')
 
-  const error = decide.error instanceof ApiError ? (decide.error.body as ApiErrorBody) : null
+  const error = decide.error instanceof ApiError ? decide.error : null
 
   return (
     <QueryState query={query}>
@@ -198,7 +197,7 @@ export function ApplicationReview() {
 
                         {decide.isError && (
                           <p role="alert" className="text-danger">
-                            {error?.templateId ?? error?.detail ?? 'Could not record the decision.'}
+                            {error?.fieldError('templateId') ?? error?.detail ?? 'Could not record the decision.'}
                           </p>
                         )}
 

@@ -17,7 +17,7 @@ import { EmptyState, QueryState } from '@/components/states'
 import { ApiError } from '@/hooks/use-api'
 import { date, timeRange } from '@/lib/format'
 import { useAssignedSections, useAttendanceSheet, useSubmitAttendance } from '../api'
-import type { ApiErrorBody, AttendanceMark } from '@/types'
+import type { AttendanceMark } from '@/types'
 
 const MARKS: { id: AttendanceMark; label: string; tone: string }[] = [
   { id: 'PRESENT', label: 'Present', tone: 'border-success bg-success/10 text-success' },
@@ -78,7 +78,7 @@ function Sheet({
 
   const sessionId = query.data?.session?.id ?? ''
   const submit = useSubmitAttendance(sessionId, key)
-  const error = submit.error instanceof ApiError ? (submit.error.body as ApiErrorBody) : null
+  const error = submit.error instanceof ApiError ? submit.error : null
 
   return (
     <QueryState query={query}>
@@ -233,7 +233,7 @@ function Sheet({
 
                   {submit.isError && (
                     <p role="alert" className="text-danger">
-                      {error?.marks ?? error?.detail ?? 'Could not submit attendance.'}
+                      {error?.fieldError('marks') ?? error?.detail ?? 'Could not submit attendance.'}
                     </p>
                   )}
                   {submit.isSuccess && (

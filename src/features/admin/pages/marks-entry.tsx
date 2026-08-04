@@ -17,7 +17,6 @@ import {
 import { QueryState } from '@/components/states'
 import { ApiError } from '@/hooks/use-api'
 import { useMarksEntry, usePublishMarks, useSaveMarks } from '../api'
-import type { ApiErrorBody } from '@/types'
 
 /**
  * ERP Marks Entry & Results Workspace — Figma 7:14290.
@@ -38,7 +37,7 @@ export function MarksEntry() {
 
   const rejected = Object.fromEntries((save.data?.rejected ?? []).map((r) => [r.studentId, r.reason]))
   const publishError =
-    publish.error instanceof ApiError ? (publish.error.body as ApiErrorBody) : null
+    publish.error instanceof ApiError ? publish.error : null
 
   return (
     <QueryState query={query}>
@@ -149,7 +148,7 @@ export function MarksEntry() {
                 </div>
                 {publish.isError && (
                   <p role="alert" className="mt-2 text-danger">
-                    {publishError?.confirmation ?? publishError?.detail ?? 'Could not publish.'}
+                    {publishError?.fieldError('confirmation') ?? publishError?.detail ?? 'Could not publish.'}
                   </p>
                 )}
               </div>
