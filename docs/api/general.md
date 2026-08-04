@@ -64,26 +64,36 @@ printed on the document. Never route on the human one.
 
 ## 3. Envelopes
 
-Single resources are returned bare — no `{ "data": ... }` wrapper. The status
-code already says whether it worked, and a wrapper is a field to unwrap on
-every one of 61 endpoints.
+**Specified in full in [contract.md](contract.md). This is the summary.**
 
-Lists that can outgrow a screen use DRF's `PageNumberPagination` shape,
-because that is what the backend produces by default:
+Every 2xx body is `{ "data": …, "meta": { … } }`. `data` is the documented
+response type verbatim; `meta` carries what is *about* the response rather
+than in it — `requestId`, and `pagination` when the server paged.
 
-```ts
-Paginated<T> = { count: number; next: string | null; previous: string | null; results: T[] }
+```jsonc
+{ "data": { "id": "inv-2", "number": "INV-4402" },
+  "meta": { "requestId": "01JT3K…", "timestamp": "2026-08-04T11:20:33Z" } }
 ```
 
-`next`/`previous` are absolute URLs. Pass them back to `apiFetch` verbatim;
-do not rebuild them from a page number.
+An earlier revision of this section argued for bare payloads, on the grounds
+that a wrapper is "a field to unwrap on every one of 61 endpoints." That
+holds only if each endpoint unwraps it. Every request in the product goes
+through `apiFetch`, so it is unwrapped once, there — and no hook or screen
+ever sees it. See [contract.md §1](contract.md#1-why-two-shapes-and-not-one).
 
-Feeds where rows are inserted while you page — forum threads, payment
-history — use `Cursored<T>` instead. Offset pagination on a live feed either
-skips a row or shows it twice.
+Paging lives in `meta.pagination`, in one of two forms: `{count, next,
+previous}` for stable row orders, `{nextCursor}` for feeds where rows arrive
+while you page (forum threads, payment history). `next`/`previous` are
+absolute URLs — pass them back verbatim, never rebuild them from a page
+number.
+
+`apiFetch` folds `meta.pagination` back onto the rows, so hooks keep the
+client-side `Paginated<T>` / `Cursored<T>` shapes they always had. The change
+is on the wire, not in the call sites.
 
 Bounded lists (six metrics, five timetable slots, four installment steps) are
-plain arrays inside the screen payload. Paginating them would be ceremony.
+plain arrays inside the screen payload, with no `meta.pagination`.
+Paginating them would be ceremony.
 
 ## 4. Transport: JSON, and compression at the edge
 
@@ -133,29 +143,46 @@ body. Worth wiring on the first list; not worth wiring on all 61 up front.
 
 ## 6. Errors
 
-DRF's shape. Field errors and the non-field `detail` arrive in one object:
+**Specified in full in [contract.md §3](contract.md#3-errors-rfc-7807-problem-details).
+This is the summary.**
+
+Every non-2xx body is an RFC 7807 problem document, served as
+`application/problem+json`:
 
 ```jsonc
-{ "detail": "Not found." }                                  // 404
-{ "detail": "Given token not valid…", "code": "token_not_valid" }  // 401
-{ "amount": ["Cannot exceed the outstanding 48500.00."] }   // 400, field error
-{ "detail": "No seats remaining.", "code": "seat_unavailable" } // 409
+{
+  "type": "https://api.unigpt.edu/problems/seat-unavailable",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "CS-401 Section B filled while you were deciding.",
+  "instance": "/api/student/academic/registration/courses/",
+  "code": "seat_unavailable",
+  "requestId": "01JT3K…"
+}
 ```
 
-`ApiError` from [`use-api.ts`](../../src/hooks/use-api.ts) carries `.status`
-and `.body`. Branch on `code` when present — never on the human-readable
-`detail`, which is copy and will change.
+`ApiError` from [`use-api.ts`](../../src/hooks/use-api.ts) carries `.status`,
+the parsed `.problem`, and two shortcuts: `.code` to branch on and `.detail`
+to render. Field rejections come back as an `errors` array, read with
+`.fieldError('phone')`.
+
+**Branch on `code`. Never on `title` or `detail`** — those are copy and will
+be rewritten without a version bump.
 
 | Status | Means | UI does |
 |---|---|---|
-| 400 | Validation failed | Field errors under the inputs |
+| 400 | Request itself malformed | Generic error state |
 | 401 | Token dead | `apiFetch` refreshes and retries once, then signs out |
-| 403 | Authenticated, not allowed | Full-page "not available for your account" |
+| 403 | Authenticated, not allowed | Renders `detail` — it says which of the six reasons applies |
 | 404 | No such resource | Empty state, not an error state |
-| 409 | Conflict — seat gone, already submitted | Toast + refetch; **rolls back an optimistic update** |
-| 422 | Semantically invalid but well-formed | Same as 400 |
+| 409 | Conflict — seat gone, already submitted | Toast + refetch; **rolls back an optimistic update**. Always carries a `code` |
+| 422 | Well-formed, semantically rejected | Field errors under the inputs, from `errors[]` |
 | 429 | Rate limited (AI endpoints) | Disable the trigger, show the retry window |
 | 5xx | Ours | Retry with backoff, then error state |
+
+The registry of every `code` in use is in
+[contract.md §3.6](contract.md#36-problem-code-registry). Adding one means
+adding a row there.
 
 ## 7. Auth
 
@@ -304,14 +331,21 @@ entry. Both use the same contract, and it is worth stating once:
 
 ## 11. For the backend developer
 
+Start with **[contract.md](contract.md)** — the response envelope and the
+RFC 7807 error shape, with the DRF renderer, pagination classes and exception
+handler that implement them. It applies to every endpoint in all three
+personas, and it is three files' worth of work you only do once.
+
 The per-contract lists are in
 [student §10](student.md#10-for-the-backend-developer),
 [faculty §7](faculty.md#7-for-the-backend-developer) and
-[admin §8](admin.md#8-for-the-backend-developer). Three items apply everywhere:
+[admin §8](admin.md#8-for-the-backend-developer). Four items apply everywhere:
 
-1. **The access token needs a `role` claim.** SimpleJWT does not emit one, and
+1. **Every response goes through the envelope or the problem handler.** See
+   [contract.md §4](contract.md#4-implementing-it-in-drf). No view opts out.
+2. **The access token needs a `role` claim.** SimpleJWT does not emit one, and
    without it the app cannot pick a shell and treats the session as
    unauthenticated.
-2. **`COERCE_DECIMAL_TO_STRING` stays at its default `True`.** `Money` is a
+3. **`COERCE_DECIMAL_TO_STRING` stays at its default `True`.** `Money` is a
    decimal string and every contract depends on it.
-3. **`USE_TZ = True`, and all datetimes serialise as UTC with `Z`.**
+4. **`USE_TZ = True`, and all datetimes serialise as UTC with `Z`.**

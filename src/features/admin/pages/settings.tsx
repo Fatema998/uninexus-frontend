@@ -8,7 +8,6 @@ import { QueryState } from '@/components/states'
 import { ApiError } from '@/hooks/use-api'
 import { date } from '@/lib/format'
 import { useAdminSettings, useSaveSettings } from '../api-ops'
-import type { ApiErrorBody } from '@/types'
 
 /**
  * Institutional Settings — no Figma frame exists; composed from tokens only.
@@ -22,7 +21,7 @@ export function AdminSettings() {
   const save = useSaveSettings()
   const [changed, setChanged] = useState<Record<string, boolean>>({})
 
-  const error = save.error instanceof ApiError ? (save.error.body as ApiErrorBody) : null
+  const error = save.error instanceof ApiError ? save.error : null
   // 409 stale_version: another admin saved first. Reloading is the only
   // correct response — silently winning would revert their change.
   const stale = error?.code === 'stale_version'

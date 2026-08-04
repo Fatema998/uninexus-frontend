@@ -10,7 +10,6 @@ import { QueryState } from '@/components/states'
 import { ApiError } from '@/hooks/use-api'
 import { fileSize, relative } from '@/lib/format'
 import { useAssignedSections, useSectionDetail, useUploadMaterials } from '../api'
-import type { ApiErrorBody } from '@/types'
 
 /** Faculty Courses Management — Figma 1:3640. */
 export function CoursesManagement() {
@@ -87,7 +86,7 @@ function SectionPanel({ sectionId }: { sectionId: string }) {
   const upload = useUploadMaterials(sectionId)
   const [files, setFiles] = useState<File[]>([])
 
-  const error = upload.error instanceof ApiError ? (upload.error.body as ApiErrorBody) : null
+  const error = upload.error instanceof ApiError ? upload.error : null
 
   function send() {
     const form = new FormData()
@@ -157,7 +156,7 @@ function SectionPanel({ sectionId }: { sectionId: string }) {
 
               {upload.isError && (
                 <p role="alert" className="text-danger">
-                  {error?.files ?? error?.detail ?? 'Upload failed.'}
+                  {error?.fieldError('files') ?? error?.detail ?? 'Upload failed.'}
                 </p>
               )}
             </CardBody>

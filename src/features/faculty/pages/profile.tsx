@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input'
 import { QueryState } from '@/components/states'
 import { ApiError } from '@/hooks/use-api'
 import { useFacultyProfile, useUpdateProfile } from '../api'
-import type { ApiErrorBody } from '@/types'
 
 /**
  * Faculty Profile — Figma 1:868.
@@ -26,7 +25,7 @@ export function FacultyProfile() {
   const [phone, setPhone] = useState<string | null>(null)
   const [officeRoom, setOfficeRoom] = useState<string | null>(null)
 
-  const error = update.error instanceof ApiError ? (update.error.body as ApiErrorBody) : null
+  const error = update.error instanceof ApiError ? update.error : null
 
   return (
     <QueryState query={query}>

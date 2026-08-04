@@ -35,44 +35,109 @@ export type Id = string
  *  second campus does not become a migration. */
 export type CurrencyCode = 'BDT'
 
-// ------------------------------------------------------------- envelopes
+// ------------------------------------------------------------- the envelope
 
 /**
- * DRF's `PageNumberPagination` shape — the backend's default, so we take it
- * as-is rather than inventing a wrapper it would have to be configured into.
+ * Every 2xx body on the wire. One shape, no exceptions — see
+ * [docs/api/contract.md](../../docs/api/contract.md) §2.
  *
- * `next` / `previous` are absolute URLs or null. Pass them straight back to
- * `apiFetch`; do not rebuild them from `page` params.
+ * You will almost never name this type: `apiFetch` unwraps it at the single
+ * chokepoint, so hooks and screens see `T` (or `Paginated<T>`), never the
+ * envelope. It exists so the parser and the backend doc agree on one thing.
  */
-export type Paginated<T> = {
-  count: number
-  next: string | null
-  previous: string | null
-  results: T[]
+export type Envelope<T> = {
+  data: T
+  meta: Meta
 }
 
 /**
- * Cursor pagination, for feeds where rows are inserted while you page
- * (forum threads, payment history). Offsets skip or repeat rows there.
+ * Envelope sidecar. Everything here is *about* the response rather than part
+ * of it — which is exactly why it does not belong inside `data`.
  */
-export type Cursored<T> = {
-  results: T[]
+export type Meta = {
+  /** Echoes `X-Request-Id`. Quote it in a bug report and the log is findable. */
+  requestId: string
+  /** Present only when `data` is a list that the server paged. */
+  pagination?: Pagination
+  /** RFC 3339. The server's clock, for cache-age and clock-skew debugging. */
+  timestamp?: ISODateTime
+}
+
+/** Page-number paging: the default for anything with a stable row order. */
+export type PagePagination = {
+  count: number
+  /** Absolute URLs, or null at the edges. Pass back verbatim; never rebuild. */
+  next: string | null
+  previous: string | null
+}
+
+/** Cursor paging, for feeds where rows arrive while you page. */
+export type CursorPagination = {
   /** Opaque; pass as `?cursor=`. Null means the end. */
   nextCursor: string | null
 }
 
+export type Pagination = PagePagination | CursorPagination
+
 /**
- * DRF's error body. Field errors and the non-field `detail` arrive in the
- * same object, which is why the value type is a union.
- *
- *   { "detail": "Not found." }
- *   { "amount": ["Ensure this value is less than or equal to 48500.00."] }
+ * A paged list as `apiFetch` hands it back — `meta.pagination` folded onto the
+ * rows so a screen has one object, not two. The wire shape is
+ * `Envelope<T[]>` with `meta.pagination`; this is the client-side view of it.
  */
-export type ApiErrorBody = {
+export type Paginated<T> = PagePagination & { results: T[] }
+
+/** The cursor equivalent. Same folding, same reason. */
+export type Cursored<T> = CursorPagination & { results: T[] }
+
+// -------------------------------------------------------------- the problem
+
+/**
+ * Every non-2xx body: RFC 7807 Problem Details, plus our extension members.
+ * Served as `application/problem+json`. See docs/api/contract.md §3.
+ *
+ *   {
+ *     "type": "https://api.unigpt.edu/problems/seat-unavailable",
+ *     "title": "No seats remaining",
+ *     "status": 409,
+ *     "detail": "CS-401 Section B filled while you were deciding.",
+ *     "instance": "/api/student/academic/registration/courses/",
+ *     "code": "seat_unavailable",
+ *     "requestId": "01JT3K…"
+ *   }
+ *
+ * Branch on `code`, never on `title` or `detail` — those are copy and will
+ * be rewritten without a version bump.
+ */
+export type Problem = {
+  /** Absolute URI naming the problem kind. `about:blank` for plain statuses. */
+  type: string
+  /** Short human summary, stable per `type`. Safe as a heading. */
+  title: string
+  status: number
+  /** This occurrence, in prose. Safe to show a user. */
   detail?: string
-  /** Machine-readable reason, for branching. Absent on generic 4xx. */
+  /** URI of the request that failed. */
+  instance?: string
+
+  // ------------------------------------------------------------- extensions
+  /** Machine-readable reason. The only field worth branching on. */
   code?: string
-  [field: string]: string | string[] | undefined
+  /** Per-field rejections. Present on 422, absent everywhere else. */
+  errors?: FieldError[]
+  /** Echoes `meta.requestId` from the success path, for the same reason. */
+  requestId?: string
+  /** Contract-declared extras (`stale_version`, `retryAfter`, `blockedReason`…). */
+  [extension: string]: unknown
+}
+
+/** One rejected field. An array, not a map: a field can fail twice. */
+export type FieldError = {
+  /** Dotted path into the request body: `scores.2.points`. */
+  field: string
+  /** Machine-readable: `blank`, `invalid`, `read_only_field`, `min_value`. */
+  code: string
+  /** Human-readable, already localised. */
+  detail: string
 }
 
 // -------------------------------------------------------------- presentation

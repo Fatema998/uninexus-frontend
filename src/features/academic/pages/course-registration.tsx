@@ -16,7 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { ApiErrorBody } from '@/types'
 
 const DEPARTMENTS = [
   'All Departments',
@@ -43,7 +42,7 @@ export function CourseRegistration() {
   const remove = useRemoveCourse()
   const busy = add.isPending || remove.isPending
 
-  const conflict = add.error instanceof ApiError ? (add.error.body as ApiErrorBody) : null
+  const conflict = add.error instanceof ApiError ? add.error : null
 
   return (
     <QueryState query={query}>

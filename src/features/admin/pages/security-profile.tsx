@@ -23,7 +23,6 @@ import {
   useSecurityProfile,
   useSendPasswordReset,
 } from '../api'
-import type { ApiErrorBody } from '@/types'
 import type { UserStatus } from '@/types/admin'
 
 const STATUS_TONE: Record<UserStatus, BadgeTone> = {
@@ -54,8 +53,8 @@ export function SecurityProfile() {
   const [reason, setReason] = useState('')
 
   const statusError =
-    changeStatus.error instanceof ApiError ? (changeStatus.error.body as ApiErrorBody) : null
-  const revokeError = revoke.error instanceof ApiError ? (revoke.error.body as ApiErrorBody) : null
+    changeStatus.error instanceof ApiError ? changeStatus.error : null
+  const revokeError = revoke.error instanceof ApiError ? revoke.error : null
 
   return (
     <QueryState query={query}>
@@ -195,7 +194,7 @@ export function SecurityProfile() {
 
               {changeStatus.isError && (
                 <p role="alert" className="text-danger">
-                  {statusError?.reason ?? statusError?.detail ?? 'Could not change the status.'}
+                  {statusError?.fieldError('reason') ?? statusError?.detail ?? 'Could not change the status.'}
                 </p>
               )}
               {changeStatus.isSuccess && (

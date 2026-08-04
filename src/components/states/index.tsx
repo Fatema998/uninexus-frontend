@@ -56,9 +56,17 @@ export function EmptyState({
   )
 }
 
-/** Turn an unknown thrown value into something worth showing a user. */
+/**
+ * Turn an unknown thrown value into something worth showing a user.
+ *
+ * The server's `detail` wins when it sent one: it knows which of the six
+ * things that return 403 actually happened. The status fallbacks below only
+ * run for `about:blank` problems — a proxy 502, a dropped connection, or any
+ * hop that never reached the application (docs/api/contract.md §3.4).
+ */
 function messageFor(error: unknown): string {
   if (error instanceof ApiError) {
+    if (error.detail) return error.detail
     if (error.status === 403) return 'You do not have access to this.'
     if (error.status === 404) return 'We could not find what you were looking for.'
     if (error.status >= 500) return 'The server had a problem. Please try again shortly.'

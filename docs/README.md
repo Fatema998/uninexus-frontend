@@ -14,14 +14,15 @@ Design and build documentation for **UniGPT** — an AI-native university portal
 | [design.md](design.md) | **Token authority.** Colours, type, spacing, radius, components, layout rules | Writing any UI. Every visual value comes from here |
 | [screen-inventory.md](screen-inventory.md) | All 93 frames → node IDs → routes, canonical vs superseded | Picking up a screen; wiring routes; pulling a frame from Figma |
 | [architecture.md](architecture.md) | Stack, directory layout, routing, data layer, conventions | Deciding where a file goes or how to fetch something |
-| [api/general.md](api/general.md) | **Wire conventions.** Formats, envelopes, errors, auth, transport, compression, optimistic-UI pattern | Before any API work — the other three assume it |
+| [api/contract.md](api/contract.md) | **Response contract.** The `{data, meta}` success envelope and RFC 7807 errors, with the DRF renderer, pagination and exception handler that implement them | Building any endpoint; debugging any response shape |
+| [api/general.md](api/general.md) | **Wire conventions.** Formats, auth, transport, compression, caching, optimistic-UI pattern | Before any API work — the other four assume it |
 | [api/student.md](api/student.md) | Student endpoints — screen-shaped payloads, the separate assistant, payment flow | Wiring a student screen |
 | [api/faculty.md](api/faculty.md) | Faculty endpoints — section scoping, whole-object writes, why almost nothing is optimistic | Wiring a faculty screen; anything that writes to a student's record |
 | [api/admin.md](api/admin.md) | Admin endpoints — pagination at scale, PII boundaries, optimistic locking, irreversible actions | Wiring an admin screen; anything institution-wide |
 | [build-plan.md](build-plan.md) | 7 phases, tasks, dependencies, definitions of done | Planning a sprint; knowing what's next |
 
-Read `general.md` once, then the persona you are working in. The three
-persona docs deliberately repeat nothing from it.
+Read `contract.md` and `general.md` once, then the persona you are working
+in. The three persona docs deliberately repeat nothing from either.
 
 ## Order to read them
 

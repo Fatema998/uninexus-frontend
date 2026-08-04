@@ -11,7 +11,6 @@ import { dateTime, fileSize } from '@/lib/format'
 import { useAssignmentDetail, useSubmitAssignment } from '../api'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
-import type { ApiErrorBody } from '@/types'
 
 /**
  * LMS Assignment Submission — Figma 6:3292.
@@ -29,7 +28,7 @@ export function AssignmentSubmission() {
   const [comment, setComment] = useState('')
   const [agreed, setAgreed] = useState(false)
 
-  const errors = submit.error instanceof ApiError ? (submit.error.body as ApiErrorBody) : null
+  const errors = submit.error instanceof ApiError ? submit.error : null
 
   return (
     <QueryState query={query}>
@@ -157,7 +156,9 @@ export function AssignmentSubmission() {
 
                     {submit.isError && (
                       <p role="alert" className="text-danger">
-                        {errors?.files ?? errors?.integrityAgreed ?? errors?.detail ??
+                        {errors?.fieldError('files') ??
+                          errors?.fieldError('integrityAgreed') ??
+                          errors?.detail ??
                           'Submission failed. Your files were not uploaded.'}
                       </p>
                     )}

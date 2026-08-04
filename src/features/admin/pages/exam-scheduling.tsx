@@ -15,7 +15,6 @@ import { QueryState } from '@/components/states'
 import { ApiError } from '@/hooks/use-api'
 import { dateTime } from '@/lib/format'
 import { useAssignSlot, useExamSchedule } from '../api'
-import type { ApiErrorBody } from '@/types'
 import type { ExamScheduleResponse, SlotState } from '@/types/admin'
 
 const TONE: Record<SlotState, BadgeTone> = {
@@ -125,7 +124,7 @@ function SlotAssign({
   field: 'hall' | 'proctor'
 }) {
   const assign = useAssignSlot(slot.id)
-  const error = assign.error instanceof ApiError ? (assign.error.body as ApiErrorBody) : null
+  const error = assign.error instanceof ApiError ? assign.error : null
 
   const hallId = halls.find((h) => h.name === slot.hall)?.id ?? ''
   const proctorId = proctors.find((p) => p.name === slot.proctorName)?.id ?? ''

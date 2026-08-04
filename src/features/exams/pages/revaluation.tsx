@@ -15,7 +15,7 @@ import { EmptyState, QueryState } from '@/components/states'
 import { ApiError } from '@/hooks/use-api'
 import { date, money, relative } from '@/lib/format'
 import { useRequestRevaluation, useRevaluation } from '../api'
-import type { ApiErrorBody, RevaluationStatus } from '@/types'
+import type { RevaluationStatus } from '@/types'
 
 const STATUS_TONE: Record<RevaluationStatus, BadgeTone> = {
   PENDING: 'warning',
@@ -37,7 +37,7 @@ export function Revaluation() {
   const [reason, setReason] = useState('')
 
   // Server-side field errors, keyed as DRF returns them.
-  const fieldErrors = submit.error instanceof ApiError ? (submit.error.body as ApiErrorBody) : null
+  const fieldErrors = submit.error instanceof ApiError ? submit.error : null
 
   function onSubmit() {
     submit.mutate(
@@ -95,7 +95,7 @@ export function Revaluation() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <FieldError errors={fieldErrors?.courseId} />
+                        <FieldError message={fieldErrors?.fieldError('courseId')} />
                       </label>
 
                       <div className="grid gap-4 sm:grid-cols-2">
@@ -113,7 +113,7 @@ export function Revaluation() {
                               ))}
                             </SelectContent>
                           </Select>
-                          <FieldError errors={fieldErrors?.examTypeId} />
+                          <FieldError message={fieldErrors?.fieldError('examTypeId')} />
                         </label>
 
                         <label className="flex flex-col gap-1.5">
@@ -130,7 +130,7 @@ export function Revaluation() {
                               ))}
                             </SelectContent>
                           </Select>
-                          <FieldError errors={fieldErrors?.reviewTypeId} />
+                          <FieldError message={fieldErrors?.fieldError('reviewTypeId')} />
                         </label>
                       </div>
 
@@ -147,11 +147,11 @@ export function Revaluation() {
                             ? `At least ${MIN_REASON} characters (${reason.trim().length}/${MIN_REASON}).`
                             : 'Looks good.'}
                         </span>
-                        <FieldError errors={fieldErrors?.reason} />
+                        <FieldError message={fieldErrors?.fieldError('reason')} />
                       </label>
 
                       {/* Non-field failures — a 409 or a 5xx, not a bad input. */}
-                      {submit.isError && !hasFieldError(fieldErrors) && (
+                      {submit.isError && !fieldErrors?.problem.errors?.length && (
                         <p role="alert" className="text-danger">
                           {fieldErrors?.detail ?? 'Could not submit the request. Try again.'}
                         </p>
@@ -203,14 +203,11 @@ export function Revaluation() {
   )
 }
 
-const hasFieldError = (body: ApiErrorBody | null) =>
-  body ? Object.entries(body).some(([k, v]) => k !== 'detail' && Array.isArray(v)) : false
-
-function FieldError({ errors }: { errors?: string | string[] }) {
-  if (!errors) return null
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null
   return (
     <span role="alert" className="text-danger">
-      {Array.isArray(errors) ? errors.join(' ') : errors}
+      {message}
     </span>
   )
 }

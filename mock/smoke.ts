@@ -57,9 +57,25 @@ function check(name: string, fn: () => void) {
 
 const auth = () => ({ Authorization: `Bearer ${token}` })
 
+/**
+ * Mirrors `unwrap` in src/hooks/use-api.ts, so every assertion below reads the
+ * payload a screen would see rather than the envelope around it. `raw` stays
+ * available for the contract checks that are *about* the envelope.
+ */
+function unwrap(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || !('data' in raw) || !('meta' in raw)) return raw
+  const { data, meta } = raw as { data: unknown; meta: { pagination?: object } }
+  if (meta?.pagination) {
+    if (Array.isArray(data)) return { ...meta.pagination, results: data }
+    if (data && typeof data === 'object' && 'results' in data) return { ...data, ...meta.pagination }
+  }
+  return data
+}
+
 async function get(path: string, extra = '') {
   const res = await fetch(`${BASE}${path}${Q}${extra}`, { headers: auth() })
-  return { res, body: res.status === 204 ? null : await res.json().catch(() => null) }
+  const raw = res.status === 204 ? null : await res.json().catch(() => null)
+  return { res, raw, body: unwrap(raw) }
 }
 
 async function send(method: string, path: string, payload?: unknown) {
@@ -68,7 +84,8 @@ async function send(method: string, path: string, payload?: unknown) {
     headers: { ...auth(), ...(payload ? { 'Content-Type': 'application/json' } : {}) },
     body: payload ? JSON.stringify(payload) : undefined,
   })
-  return { res, body: res.status === 204 ? null : await res.json().catch(() => null) }
+  const raw = res.status === 204 ? null : await res.json().catch(() => null)
+  return { res, raw, body: unwrap(raw) }
 }
 
 // --------------------------------------------------------------------- run
@@ -86,7 +103,7 @@ console.log('\nauth')
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: 'student', password: 'anything' }),
   })
-  const b = (await res.json()) as { access: string; refresh: string }
+  const b = unwrap(await res.json()) as { access: string; refresh: string }
   token = b.access
   check('POST /api/token/ mints a pair', () => {
     assert.equal(res.status, 200)
@@ -164,9 +181,10 @@ console.log('\nwrites')
 
 {
   const blank = await send('POST', '/api/student/lms/notes/', { title: '   ' })
-  check('blank title → 400 with a field error', () => {
-    assert.equal(blank.res.status, 400)
-    assert.ok(Array.isArray((blank.body as { title?: string[] }).title), 'no field error array')
+  check('blank title → 422 with a field error', () => {
+    assert.equal(blank.res.status, 422)
+    const errors = (blank.raw as { errors?: { field: string }[] }).errors
+    assert.ok(errors?.some((e) => e.field === 'title'), 'no field error for title')
   })
 }
 
@@ -207,10 +225,10 @@ console.log('\nwrites')
     amount: '10.00',
     idempotencyKey: crypto.randomUUID(),
   })
-  check('below minimum → 400', () => assert.equal(tooSmall.res.status, 400))
+  check('below minimum → 422', () => assert.equal(tooSmall.res.status, 422))
 
   const noKey = await send('POST', '/api/student/finance/payments/', { ...payload, idempotencyKey: '' })
-  check('missing idempotency key → 400', () => assert.equal(noKey.res.status, 400))
+  check('missing idempotency key → 422', () => assert.equal(noKey.res.status, 422))
 
   const polled = await get(`/api/student/finance/payments/${(first.body as { id: string }).id}/`)
   check('payment intent is pollable and starts unsettled', () => {
@@ -303,9 +321,13 @@ console.log('\ntransport')
 
 {
   const res = await fetch(`${BASE}/api/student/nope/`, { headers: auth() })
-  const b = (await res.json()) as { detail?: string }
-  check('unknown route → 404 with a DRF-shaped body', () => {
+  const b = (await res.json()) as { type?: string; title?: string; status?: number; detail?: string }
+  check('unknown route → 404 as an RFC 7807 problem', () => {
     assert.equal(res.status, 404)
+    assert.equal(res.headers.get('content-type'), 'application/problem+json')
+    assert.equal(typeof b.type, 'string')
+    assert.equal(typeof b.title, 'string')
+    assert.equal(b.status, 404)
     assert.equal(typeof b.detail, 'string')
   })
 }
@@ -320,7 +342,7 @@ console.log('\nfaculty writes')
     feedback: 'good',
     release: true,
   })
-  check('grading with a partial rubric → 400', () => assert.equal(partialRubric.res.status, 400))
+  check('grading with a partial rubric → 422', () => assert.equal(partialRubric.res.status, 422))
 
   const overMax = await send('PUT', '/api/faculty/submissions/sub-1/grade/', {
     scores: [
@@ -332,7 +354,7 @@ console.log('\nfaculty writes')
     feedback: 'x',
     release: false,
   })
-  check('a mark above the criterion max → 400', () => assert.equal(overMax.res.status, 400))
+  check('a mark above the criterion max → 422', () => assert.equal(overMax.res.status, 422))
 
   const good = await send('PUT', '/api/faculty/submissions/sub-1/grade/', {
     scores: [
@@ -357,8 +379,8 @@ console.log('\nfaculty writes')
   const partial = await send('PUT', '/api/faculty/attendance/ses-sec-1-x/', {
     marks: [{ studentId: 'stu-1', mark: 'PRESENT' }],
   })
-  check('a partial roster → 400 (unmarked is not absent)', () =>
-    assert.equal(partial.res.status, 400),
+  check('a partial roster → 422 (unmarked is not absent)', () =>
+    assert.equal(partial.res.status, 422),
   )
 
   const full = await send('PUT', '/api/faculty/attendance/ses-sec-1-x/', {
@@ -450,7 +472,7 @@ console.log('\nadmin — scale, blast radius, irreversibility')
   const noReason = await send('PATCH', '/api/admin/users/usr-1000/status/', {
     status: 'SUSPENDED',
   })
-  check('suspending without a reason → 400', () => assert.equal(noReason.res.status, 400))
+  check('suspending without a reason → 422', () => assert.equal(noReason.res.status, 422))
 
   const ok = await send('PATCH', '/api/admin/users/usr-1000/status/', {
     status: 'SUSPENDED',
@@ -496,8 +518,8 @@ console.log('\nadmin — scale, blast radius, irreversibility')
     templateId: null,
     note: 'Strong candidate.',
   })
-  check('approving without an offer template → 400', () =>
-    assert.equal(noTemplate.res.status, 400),
+  check('approving without an offer template → 422', () =>
+    assert.equal(noTemplate.res.status, 422),
   )
 
   const ok = await send('POST', '/api/admin/admissions/app-0/decision/', {
@@ -588,8 +610,8 @@ console.log('\nadmin — scale, blast radius, irreversibility')
   const partial = await send('POST', '/api/admin/exams/marks/publish/', {
     confirmation: 'wrong',
   })
-  check('publishing without the typed course code → 400', () =>
-    assert.equal(partial.res.status, 400),
+  check('publishing without the typed course code → 422', () =>
+    assert.equal(partial.res.status, 422),
   )
 
   const incomplete = await send('POST', '/api/admin/exams/marks/publish/', {
@@ -627,6 +649,73 @@ console.log('\nadmin — scale, blast radius, irreversibility')
   check('the sheet locks once published', () => {
     assert.equal(locked.res.status, 409)
     assert.equal((locked.body as { code: string }).code, 'locked')
+  })
+}
+
+// --------------------------------------------------------------- contract
+
+console.log('\nresponse contract')
+
+{
+  const { res, raw } = await get('/api/student/dashboard/')
+  const env = raw as { data?: unknown; meta?: { requestId?: string; timestamp?: string } }
+  check('a 2xx body is { data, meta }', () => {
+    assert.equal(res.status, 200)
+    assert.ok(env.data, 'no data member')
+    assert.equal(typeof env.meta?.requestId, 'string')
+    assert.equal(typeof env.meta?.timestamp, 'string')
+  })
+  check('meta.requestId echoes the X-Request-Id header', () =>
+    assert.equal(res.headers.get('x-request-id'), env.meta?.requestId),
+  )
+  check('an unpaged response carries no meta.pagination', () =>
+    assert.equal((env.meta as { pagination?: unknown }).pagination, undefined),
+  )
+}
+
+{
+  const { raw, body } = await get('/api/student/academic/faculty/')
+  const env = raw as { data?: unknown; meta?: { pagination?: { count?: number } } }
+  check('a paged list puts rows in data and paging in meta', () => {
+    assert.ok(Array.isArray(env.data), 'data is not an array')
+    assert.equal(typeof env.meta?.pagination?.count, 'number')
+  })
+  check('the client folds paging back onto the rows', () => {
+    const page = body as { count: number; results: unknown[] }
+    assert.equal(typeof page.count, 'number')
+    assert.ok(Array.isArray(page.results))
+  })
+}
+
+{
+  const { raw, body } = await get('/api/student/lms/forum/threads/')
+  check('a cursored list surfaces nextCursor through meta', () => {
+    assert.ok(Array.isArray((raw as { data?: unknown }).data))
+    assert.ok('nextCursor' in (body as object))
+  })
+}
+
+{
+  const res = await fetch(`${BASE}/api/student/lms/notes/${Q}&_fail=409`, { headers: auth() })
+  const p = (await res.json()) as { type: string; code?: string; requestId?: string }
+  check('an injected failure is a problem with a dereferenceable type', () => {
+    assert.equal(res.headers.get('content-type'), 'application/problem+json')
+    assert.ok(p.type.startsWith('https://'), `type was ${p.type}`)
+    assert.equal(p.code, 'mock_failure')
+    assert.equal(res.headers.get('x-request-id'), p.requestId)
+  })
+}
+
+{
+  const blank = await send('POST', '/api/student/lms/notes/', { title: '' })
+  const p = blank.raw as { code?: string; errors?: { field: string; code: string; detail: string }[] }
+  check('a validation problem carries a typed errors array', () => {
+    assert.equal(blank.res.status, 422)
+    assert.equal(p.code, 'validation_failed')
+    const first = p.errors?.[0]
+    assert.equal(first?.field, 'title')
+    assert.equal(first?.code, 'blank')
+    assert.equal(typeof first?.detail, 'string')
   })
 }
 
